@@ -14,19 +14,20 @@ export function createOpenHandler({ store, api, host, notify }) {
 
   async function toDocuments(path) {
     const name = baseName(path)
-    let text
+    let file
     try {
       // A folder named like a file (docs.md) is still a folder.
       const st = await api.stat(path)
       if (st?.kind !== 'file') return toEditor(path)
-      text = (await api.read(path)).text
+      const read = await api.read(path)
+      file = { name, text: read.text, path: read.path || path, stamp: read.stamp ?? null, bom: !!read.bom }
     } catch (e) {
       log.warn('a file the app was opened with could not be read', e)
       notify(`Could not open ${name}: ${ipcMessage(e) || 'the file could not be read.'}`, 'error')
       return
     }
     try {
-      await host.capabilities.call('documents.openFile', { name, text })
+      await host.capabilities.call('documents.openFile', file)
       notify(`Opened ${name}`, 'success')
     } catch (e) {
       log.warn('a file the app was opened with could not be added to the documents', e)

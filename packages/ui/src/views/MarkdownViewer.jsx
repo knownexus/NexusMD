@@ -564,7 +564,7 @@ function MarkdownToolbar({ onInsert }) {
 
 // `openNewest`: start with the most recently edited saved document open (a file the app was opened with is the newest),
 // instead of a blank page.
-function MarkdownViewer({ openNewest = false }) {
+function MarkdownViewer({ openNewest = false, source = null }) {
   // Documents and learning state belong to the active profile.
   const { getProfileKey } = useNexusData();
   const KEYS = React.useMemo(() => ({
@@ -606,6 +606,23 @@ function MarkdownViewer({ openNewest = false }) {
   const saveStatusTimerRef = useRefMD(null);
   const markdownRef        = useRefMD('');
   const isLoadingDoc       = useRefMD(!!newest); // a document opened at the start is not an edit, so it is not saved again
+  const sourceRef          = useRefMD(source);
+  const [externalSaveError, setExternalSaveError] = useStateMD('');
+
+  // A desktop file association hands Documents a trusted path and its read
+  // stamp. It is deliberately not made into a profile document: Save writes
+  // straight back to that path.
+  useEffectMD(() => {
+    sourceRef.current = source;
+    if (!source?.path) return;
+    clearTimeout(saveTimerRef.current);
+    clearTimeout(createDocTimerRef.current);
+    isLoadingDoc.current = true;
+    setCurrentDocId(null);
+    setMarkdown(source.text ?? '');
+    setExternalSaveError('');
+    setSaveStatus('');
+  }, [source?.path, source?.stamp]);
 
   // The Compare view's other document: the one picked, else the most recently edited other one.
   const otherDocs  = docs.filter(d => d.id !== currentDocId).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -656,6 +673,7 @@ function MarkdownViewer({ openNewest = false }) {
   useEffectMD(() => {
     // Skip when we programmatically loaded a document (not a user edit)
     if (isLoadingDoc.current) { isLoadingDoc.current = false; return; }
+    if (sourceRef.current?.path) { setSaveStatus('unsaved'); return; }
 
     clearTimeout(saveTimerRef.current);
     clearTimeout(createDocTimerRef.current);
@@ -715,6 +733,30 @@ function MarkdownViewer({ openNewest = false }) {
       clearTimeout(createDocTimerRef.current);
     };
   }, [markdown, currentDocId]);
+
+  const saveNow = useCallbackMD(async () => {
+    const openSource = sourceRef.current;
+    if (openSource?.path) {
+      const api = window.electronAPI?.editor;
+      if (!api?.write) { setExternalSaveError('This file cannot be saved from this platform.'); return; }
+      setSaveStatus('saving'); setExternalSaveError('');
+      try {
+        const result = await api.write(openSource.path, markdownRef.current, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
+        if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
+        sourceRef.current = { ...openSource, stamp: result.stamp };
+        setSaveStatus('saved');
+      } catch (err) { setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
+      return;
+    }
+    if (!markdownRef.current) return;
+    const content = markdownRef.current;
+    const current = currentDocId;
+    const next = current
+      ? docs.map(d => d.id === current ? { ...d, content, autoName: extractAutoName(content), updatedAt: Date.now() } : d)
+      : [...docs, { id: generateId(), name: null, autoName: extractAutoName(content), content, createdAt: Date.now(), updatedAt: Date.now() }];
+    try { saveDocs(next, KEYS.docs); setDocs(next); if (!current) setCurrentDocId(next.at(-1).id); setSaveStatus('saved'); }
+    catch { setSaveStatus('error'); }
+  }, [currentDocId, docs, KEYS.docs]);
 
   // Cleanup timers on unmount
   useEffectMD(() => () => {
@@ -890,6 +932,7 @@ function MarkdownViewer({ openNewest = false }) {
 
   // Tab key in editor
   const onKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(); return; }
     if (e.key !== "Tab") return;
     e.preventDefault();
     const s   = e.target.selectionStart;
@@ -1127,6 +1170,12 @@ function MarkdownViewer({ openNewest = false }) {
               </span>
             )}
           </div>
+
+          <button style={{ ...barBtnStyle, background: 'var(--accent)', color: 'var(--accent-fg)', borderColor: 'var(--accent)' }} onClick={saveNow} title="Save (Ctrl+S)">
+            Save
+          </button>
+
+          {source?.path && <span style={{ fontSize: 11, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={source.path}>Original file</span>}
 
           {/* Open file */}
           <label style={barBtnStyle}>
