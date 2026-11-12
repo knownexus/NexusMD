@@ -110,6 +110,7 @@ describe('MarkdownViewer compare view', () => {
   afterEach(() => {
     cleanup()
     localStorage.clear()
+    delete window.electronAPI
     document.head.querySelectorAll(`script[src="${HLJS}"]`).forEach(s => s.remove())
     delete window.hljs
   })
@@ -177,5 +178,33 @@ describe('MarkdownViewer compare view', () => {
     fireEvent.wheel(comparePane(), { deltaY: 100, ctrlKey: true })
     expect(main.style.fontSize).toBe('90%')
     expect(comparePane().style.fontSize).toBe('90%')
+  })
+})
+
+describe('MarkdownViewer original files', () => {
+  afterEach(() => {
+    cleanup()
+    localStorage.clear()
+    delete window.electronAPI
+  })
+
+  it('offers a save button and opt-in autosave controls for an original file', () => {
+    render(<MarkdownViewer source={{ path: 'C:\\work\\readme.md', name: 'readme.md', text: '# Original', stamp: 'v1' }} />)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(screen.getByText('Original file')).toBeTruthy()
+    expect(screen.getByLabelText('Autosave interval').value).toBe('0')
+    fireEvent.change(screen.getByLabelText('Autosave interval'), { target: { value: '30000' } })
+    expect(localStorage.getItem('nexusmd.documents.autosave.C:\\work\\readme.md')).toBe('30000')
+  })
+
+  it('writes changed original-file content through the desktop bridge', async () => {
+    const write = vi.fn().mockResolvedValue({ ok: true, stamp: 'v2' })
+    window.electronAPI = { editor: { write } }
+    render(<MarkdownViewer source={{ path: 'C:\\work\\readme.md', name: 'readme.md', text: '# Original', stamp: 'v1' }} />)
+    fireEvent.change(screen.getByPlaceholderText(/Start writing/), { target: { value: '# Changed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(write).toHaveBeenCalledWith(
+      'C:\\work\\readme.md', '# Changed', { expectedStamp: 'v1', overwrite: false, bom: false },
+    ))
   })
 })

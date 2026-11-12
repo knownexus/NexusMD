@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createOpenedFiles } from './opened.js'
 
-// A file opened with the desktop app (double-click, "Open with") that is Markdown or JSON becomes a saved document, as on Android:
-// a copy kept in the app, in the tool's own store, under the active profile's key.
+// A file opened with the desktop app (double-click, "Open with") becomes a
+// document for its editor. Path-backed Markdown instead stays linked to its
+// original file so Save can write it back in place.
 function memStorage() {
   const m = new Map()
   return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }
@@ -37,6 +38,15 @@ describe('files opened with the desktop app', () => {
     const saved = JSON.parse(storage.getItem('p1:json_editor_documents'))
     expect(Array.isArray(saved)).toBe(true)
     expect(saved.map(d => d.content)).toEqual(['{"a":1}', '{"a":'])
+  })
+
+  it('keeps path-backed JSON on its existing managed-document path until the JSON editor supports native saving', () => {
+    const { storage, opened } = make()
+    expect(opened.add({ name: 'settings.json', text: '{"theme":"dark"}', path: 'C:\\work\\settings.json' }))
+      .toMatchObject({ tool: 'json', created: true })
+    const saved = JSON.parse(storage.getItem('p1:json_editor_documents'))
+    expect(saved).toHaveLength(1)
+    expect(opened.getSnapshot()).toEqual({ count: 1, tool: 'json' })
   })
 
   it('refuses a file that is neither, so nothing is saved for it', () => {

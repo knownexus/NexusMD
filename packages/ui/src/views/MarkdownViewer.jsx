@@ -608,6 +608,10 @@ function MarkdownViewer({ openNewest = false, source = null }) {
   const isLoadingDoc       = useRefMD(!!newest); // a document opened at the start is not an edit, so it is not saved again
   const sourceRef          = useRefMD(source);
   const [externalSaveError, setExternalSaveError] = useStateMD('');
+  const [autosaveMs, setAutosaveMs] = useStateMD(() => {
+    if (!source?.path) return 0;
+    return Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0;
+  });
 
   // A desktop file association hands Documents a trusted path and its read
   // stamp. It is deliberately not made into a profile document: Save writes
@@ -622,6 +626,7 @@ function MarkdownViewer({ openNewest = false, source = null }) {
     setMarkdown(source.text ?? '');
     setExternalSaveError('');
     setSaveStatus('');
+    setAutosaveMs(Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0);
   }, [source?.path, source?.stamp]);
 
   // The Compare view's other document: the one picked, else the most recently edited other one.
@@ -757,6 +762,20 @@ function MarkdownViewer({ openNewest = false, source = null }) {
     try { saveDocs(next, KEYS.docs); setDocs(next); if (!current) setCurrentDocId(next.at(-1).id); setSaveStatus('saved'); }
     catch { setSaveStatus('error'); }
   }, [currentDocId, docs, KEYS.docs]);
+
+  // Autosave is opt-in for an original file. It never runs for an unchanged
+  // buffer and uses the same conflict-safe save path as the button.
+  useEffectMD(() => {
+    if (!source?.path || !autosaveMs || saveStatus !== 'unsaved') return;
+    const timer = setTimeout(() => { saveNow() }, autosaveMs);
+    return () => clearTimeout(timer);
+  }, [source?.path, autosaveMs, saveStatus, saveNow]);
+
+  const chooseAutosave = (value) => {
+    const next = Number(value) || 0;
+    setAutosaveMs(next);
+    if (source?.path) localStorage.setItem(`nexusmd.documents.autosave.${source.path}`, String(next));
+  };
 
   // Cleanup timers on unmount
   useEffectMD(() => () => {
@@ -1176,6 +1195,12 @@ function MarkdownViewer({ openNewest = false, source = null }) {
           </button>
 
           {source?.path && <span style={{ fontSize: 11, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={source.path}>Original file</span>}
+          {source?.path && <label style={{ fontSize: 11, color: 'var(--text-subtle)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            Autosave
+            <select aria-label="Autosave interval" value={autosaveMs} onChange={e => chooseAutosave(e.target.value)} style={{ fontSize: 11 }}>
+              <option value="0">Off</option><option value="15000">15 sec</option><option value="30000">30 sec</option><option value="60000">1 min</option><option value="300000">5 min</option>
+            </select>
+          </label>}
 
           {/* Open file */}
           <label style={barBtnStyle}>
