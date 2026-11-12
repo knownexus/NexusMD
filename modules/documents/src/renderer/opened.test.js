@@ -40,13 +40,12 @@ describe('files opened with the desktop app', () => {
     expect(saved.map(d => d.content)).toEqual(['{"a":1}', '{"a":'])
   })
 
-  it('keeps path-backed JSON on its existing managed-document path until the JSON editor supports native saving', () => {
+  it('keeps a path-backed JSON file out of managed document storage', () => {
     const { storage, opened } = make()
     expect(opened.add({ name: 'settings.json', text: '{"theme":"dark"}', path: 'C:\\work\\settings.json' }))
-      .toMatchObject({ tool: 'json', created: true })
-    const saved = JSON.parse(storage.getItem('p1:json_editor_documents'))
-    expect(saved).toHaveLength(1)
-    expect(opened.getSnapshot()).toEqual({ count: 1, tool: 'json' })
+      .toMatchObject({ tool: 'json', source: { path: 'C:\\work\\settings.json' }, created: false })
+    expect(storage.getItem('p1:json_editor_documents')).toBeNull()
+    expect(opened.getSnapshot()).toMatchObject({ count: 1, tool: 'json', source: { text: '{"theme":"dark"}' } })
   })
 
   it('refuses a file that is neither, so nothing is saved for it', () => {

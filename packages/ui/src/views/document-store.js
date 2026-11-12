@@ -33,14 +33,15 @@ export function relativeTime(ts) {
 // create a new one once typing starts with nothing open. `isEmpty(content)`
 // and `extractAutoName(content)` let each caller define what "nothing to
 // save yet" and "a display name" mean for their content shape.
-export function useDocumentAutosave({ storageKey, initialContent, emptyContent, isEmpty, extractAutoName, openNewest = false }) {
+export function useDocumentAutosave({ storageKey, initialContent, emptyContent, isEmpty, extractAutoName, openNewest = false, source = null }) {
   const [docs, setDocs] = usePersisted(storageKey, [])
   // With `openNewest` (the app was opened with a file) the most recently saved document is open from the first
   // render, instead of starting on `initialContent`.
-  const [newest] = useState(() => (openNewest && Array.isArray(docs) && docs.length
+  const [newest] = useState(() => (!source?.path && openNewest && Array.isArray(docs) && docs.length
     ? [...docs].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0]
     : null))
-  const [content, setContent] = useState(newest ? newest.content : initialContent)
+  const [externalSource, setExternalSource] = useState(() => source?.path ? source : null)
+  const [content, setContent] = useState(source?.path ? String(source.text ?? '') : newest ? newest.content : initialContent)
   const [currentDocId, setCurrentDocId] = useState(newest ? newest.id : null)
   const [saveStatus, setSaveStatus] = useState('')
 
@@ -50,15 +51,29 @@ export function useDocumentAutosave({ storageKey, initialContent, emptyContent, 
   const contentRef = useRef(content)
   contentRef.current = content
 
-  const isLoadingDoc = useRef(!!newest) // the opened document is loaded, not typed, so the first autosave pass skips it
+  const isLoadingDoc = useRef(!!newest || !!source?.path) // loaded content is not typed, so the first autosave pass skips it
   const saveTimerRef = useRef(null)
   const createDocTimerRef = useRef(null)
   const saveStatusTimerRef = useRef(null)
+
+  // A desktop-associated source stays outside profile storage. Editors use
+  // `externalSource` to save it through their native bridge instead.
+  useEffect(() => {
+    if (!source?.path) return
+    clearTimeout(saveTimerRef.current)
+    clearTimeout(createDocTimerRef.current)
+    isLoadingDoc.current = true
+    setExternalSource(source)
+    setCurrentDocId(null)
+    setContent(String(source.text ?? ''))
+    setSaveStatus('')
+  }, [source?.path, source?.stamp])
 
   useEffect(() => {
     // Skip when we programmatically loaded/reset content (open/new/delete),
     // not a user edit.
     if (isLoadingDoc.current) { isLoadingDoc.current = false; return }
+    if (externalSource?.path) { setSaveStatus('unsaved'); return }
 
     clearTimeout(saveTimerRef.current)
     clearTimeout(createDocTimerRef.current)
@@ -99,7 +114,7 @@ export function useDocumentAutosave({ storageKey, initialContent, emptyContent, 
       clearTimeout(saveTimerRef.current)
       clearTimeout(createDocTimerRef.current)
     }
-  }, [content, currentDocId])
+  }, [content, currentDocId, externalSource])
 
   useEffect(() => () => clearTimeout(saveStatusTimerRef.current), [])
 
@@ -109,6 +124,7 @@ export function useDocumentAutosave({ storageKey, initialContent, emptyContent, 
     const doc = docs.find(d => d.id === id)
     if (!doc) return
     isLoadingDoc.current = true
+    setExternalSource(null)
     setContent(doc.content)
     setCurrentDocId(id)
     setSaveStatus('')
@@ -118,6 +134,7 @@ export function useDocumentAutosave({ storageKey, initialContent, emptyContent, 
     clearTimeout(saveTimerRef.current)
     clearTimeout(createDocTimerRef.current)
     isLoadingDoc.current = true
+    setExternalSource(null)
     setCurrentDocId(null)
     setContent(emptyContent)
     setSaveStatus('')
@@ -146,7 +163,7 @@ export function useDocumentAutosave({ storageKey, initialContent, emptyContent, 
     setDocs(prev => prev.map(d => d.id === id ? { ...d, name: name || null } : d))
   }
 
-  const hasUnsavedContent = !currentDocId && !isEmpty(content)
+  const hasUnsavedContent = !externalSource?.path && !currentDocId && !isEmpty(content)
 
-  return { content, setContent, docs, currentDocId, saveStatus, hasUnsavedContent, openDoc, newDoc, deleteDoc, duplicateDoc, renameDoc }
+  return { content, setContent, docs, currentDocId, saveStatus, externalSource, hasUnsavedContent, openDoc, newDoc, deleteDoc, duplicateDoc, renameDoc }
 }

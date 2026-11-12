@@ -31,10 +31,10 @@ function parseOr(text, fallback) {
 
 // `openNewest`: the app was opened with a file, which is the newest saved document. It is shown as it is, and a
 // document that is not valid JSON shows its error over an empty tree rather than the sample.
-export function JsonEditorView({ openNewest = false }) {
+export function JsonEditorView({ openNewest = false, source = null }) {
   const {
     content: rawText, setContent: setRawText, docs, currentDocId, hasUnsavedContent,
-    openDoc, newDoc, deleteDoc, renameDoc,
+    openDoc, newDoc, deleteDoc, renameDoc, externalSource, saveStatus,
   } = useDocumentAutosave({
     storageKey: DOCS_STORAGE_KEY,
     initialContent: SAMPLE_TEXT,
@@ -42,6 +42,7 @@ export function JsonEditorView({ openNewest = false }) {
     isEmpty: t => !t.trim(),
     extractAutoName: jsonAutoName,
     openNewest,
+    source,
   })
 
   const [showDocsModal, setShowDocsModal] = useState(false)
@@ -61,6 +62,16 @@ export function JsonEditorView({ openNewest = false }) {
   const fileInputRef = useRef(null)
   const workspaceRef = useRef(null)
   const draggingRef = useRef(false)
+  const sourceRef = useRef(externalSource)
+  const rawTextRef = useRef(rawText)
+  const [autosaveMs, setAutosaveMs] = useState(() => source?.path ? Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0 : 0)
+
+  useEffect(() => { sourceRef.current = externalSource }, [externalSource])
+  useEffect(() => { rawTextRef.current = rawText }, [rawText])
+  useEffect(() => {
+    if (!source?.path) return
+    setAutosaveMs(Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0)
+  }, [source?.path, source?.stamp])
 
   // Derives the tree (`data`) and error state from `rawText` — the single
   // source of truth for content, whether it changed via typing, undo/redo,
@@ -182,6 +193,27 @@ export function JsonEditorView({ openNewest = false }) {
     a.click()
     showToast('Downloaded ✓')
   }
+  const saveOriginal = useCallback(async () => {
+    const openSource = sourceRef.current
+    const api = window.electronAPI?.editor
+    if (!openSource?.path || !api?.write) { showToast('This file cannot be saved from this platform'); return }
+    try {
+      const result = await api.write(openSource.path, rawTextRef.current, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom })
+      if (!result?.ok) { showToast(result?.conflict ? 'File changed on disk — your edits are still here' : 'Original file is unavailable — your edits are still here'); return }
+      sourceRef.current = { ...openSource, stamp: result.stamp }
+      showToast('Saved ✓')
+    } catch (err) { showToast(err?.message || 'Could not save the original file') }
+  }, [])
+  useEffect(() => {
+    if (!externalSource?.path || !autosaveMs || saveStatus !== 'unsaved') return
+    const timer = setTimeout(() => { saveOriginal() }, autosaveMs)
+    return () => clearTimeout(timer)
+  }, [externalSource?.path, autosaveMs, saveStatus, saveOriginal])
+  function chooseAutosave(value) {
+    const next = Number(value) || 0
+    setAutosaveMs(next)
+    if (externalSource?.path) localStorage.setItem(`nexusmd.documents.autosave.${externalSource.path}`, String(next))
+  }
   function openFile(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -211,14 +243,14 @@ export function JsonEditorView({ openNewest = false }) {
   // mounts once instead of re-subscribing (and risking stale closures) on
   // every render.
   const latestRef = useRef(null)
-  latestRef.current = { undo, redo, downloadJSON, sheet }
+  latestRef.current = { undo, redo, save: externalSource?.path ? saveOriginal : downloadJSON, sheet }
   useEffect(() => {
     function onKeyDown(e) {
       const cur = latestRef.current
       if (cur.sheet) return // the sheet handles its own keys (Escape closes it)
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); cur.undo() }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); cur.redo() }
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); cur.downloadJSON() }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); cur.save() }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
@@ -313,7 +345,14 @@ export function JsonEditorView({ openNewest = false }) {
             <input ref={fileInputRef} type="file" accept=".json" onChange={openFile} style={{ display: 'none' }}/>
           </label>
           <button className="je-btn" onClick={copyJSON}><Icon name="copy" size={13}/> Copy</button>
-          <button className="je-btn" onClick={downloadJSON} title="Ctrl+S"><Icon name="download" size={13}/> Save</button>
+          {externalSource?.path && <span style={{ fontSize: 11, color: 'var(--text-subtle)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={externalSource.path}>Original file</span>}
+          {externalSource?.path && <label style={{ fontSize: 11, color: 'var(--text-subtle)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            Autosave
+            <select aria-label="Autosave interval" value={autosaveMs} onChange={e => chooseAutosave(e.target.value)} style={{ fontSize: 11 }}>
+              <option value="0">Off</option><option value="15000">15 sec</option><option value="30000">30 sec</option><option value="60000">1 min</option><option value="300000">5 min</option>
+            </select>
+          </label>}
+          <button className="je-btn" onClick={externalSource?.path ? saveOriginal : downloadJSON} title="Ctrl+S"><Icon name="download" size={13}/> Save</button>
         </div>
       </div>
 

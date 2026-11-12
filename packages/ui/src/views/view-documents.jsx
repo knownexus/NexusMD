@@ -38,7 +38,7 @@ export function DocumentsView({ opened = 0, openedTool = 'markdown', openedSourc
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <DocumentsBar tabs={TABS} tab={tab} onTab={pickTab} save={save} />
         <div style={{ flex: 1, overflow: 'hidden' }}>
-          {tab === 'markdown' ? <MarkdownViewer openNewest={fileTool === 'markdown'} source={fileTool === 'markdown' ? openedSource : null}/> : tab === 'json' ? <JsonEditorView openNewest={fileTool === 'json'}/> : <RegexTesterView/>}
+          {tab === 'markdown' ? <MarkdownViewer openNewest={fileTool === 'markdown'} source={fileTool === 'markdown' ? openedSource : null}/> : tab === 'json' ? <JsonEditorView openNewest={fileTool === 'json'} source={fileTool === 'json' ? openedSource : null}/> : <RegexTesterView/>}
         </div>
       </div>
     </DocumentsBarContext.Provider>

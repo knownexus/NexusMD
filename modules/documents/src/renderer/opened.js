@@ -19,9 +19,7 @@ export function createOpenedFiles({ storage = globalThis.localStorage, profileKe
       // A native path means the desktop shell has handed us a real file. Keep
       // that source session in memory instead of serialising a second copy of
       // its text into the profile's managed-documents store.
-      // Markdown has the native save path today. JSON retains its existing
-      // managed-document behaviour until its editor gains the same writer.
-      if (file?.path && tool === 'markdown') {
+      if (file?.path) {
         const source = { path: file.path, name: file.name, text: String(file.text ?? ''), stamp: file.stamp ?? null, bom: !!file.bom }
         snapshot = { count: snapshot.count + 1, tool, source }
         listeners.forEach(fn => fn())
