@@ -13,6 +13,8 @@ const ALLOWED = [
   /^nexusmd\.sync\./, /^nexusmd\.oauth\.pending$/,
   // Where this window left Settings (the tab), kept on this computer and not synced.
   /^nexusmd\.settings\.tab$/,
+  // Which apps this window shows as switched off (a copy of the main process's prefs, kept in session storage).
+  /^nexusmd\.apps\./,
   // Read-only device state the shell/core own: where profile files live.
   /^nexusmd\.profileDir$/,
   // This machine's record of the start-up move of shared data into profiles (never synced).

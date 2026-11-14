@@ -85,6 +85,9 @@ export const account = {
   platform: 'android',
   serverName: serverNameOf(API_BASE),
   reviewConflicts: () => openSettings('data'),
+  // With these a pull that touched only other profiles does not reload the app.
+  activeProfileId: getActiveProfileId,
+  isLiveSafe: createKeyRegistry({ namespace: 'helm' }).isLiveSafe,
   deviceNameDefault,
   optOutKey: OPT_OUT_KEY,
   boundUserKey: USER_KEY,
