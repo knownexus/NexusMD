@@ -4,7 +4,7 @@ import {
   VsRow, VsCard, VsFullRow, ThemeModeSettings,
   VsProfiles, BackupRestoreCard, CloudSyncCard, IntegrationsView, AccountCard, SyncStatusCard, RecoveredCopiesCard, SyncConflictsCard,
   PlToggle,
-  toast, takePendingSettingsTab, OPEN_SETTINGS_EVENT,
+  toast, takePendingSettingsTab, OPEN_SETTINGS_EVENT, SettingsCollapseControls,
 } from '@nexusmd/ui'
 import { graphJSON, rendererLog, ignore, ignored } from '@nexusmd/core'
 import { appPrefsAdapter } from './adapters/appPrefs.js'
@@ -398,13 +398,27 @@ const TAB_NEEDS = { planner: ['planner', 'work'], cards: ['work'], confidential:
 export const visibleSettingsTabs = (reg = registry) =>
   SETTINGS_TABS.filter(t => !TAB_NEEDS[t.id] || TAB_NEEDS[t.id].some(id => reg.isInstalled(id)))
 
+// The tab Settings was last left on, kept on this computer (not synced: it is where this window was, not a preference).
+const LAST_TAB_KEY = 'nexusmd.settings.tab'
+export function readLastSettingsTab(reg = registry) {
+  try {
+    const t = localStorage.getItem(LAST_TAB_KEY)
+    return t && visibleSettingsTabs(reg).some(x => x.id === t) ? t : null
+  } catch (err) { ignore(log, 'the last Settings tab could not be read, so Settings opens on Profile', err, 'debug'); return null }
+}
+function rememberSettingsTab(tab) {
+  try { localStorage.setItem(LAST_TAB_KEY, tab) } catch (err) { ignore(log, 'the Settings tab could not be remembered', err, 'debug') }
+}
+
 export function DesktopSettings({ tweaks, setTweak, nav, defaultNavOrder }) {
   const profileApi = useProfile()
   const legacyCloudOn = isLegacyCloudSyncOn()
+  // Opens on the tab that was asked for (openSettings), else where it was left, else Profile.
   const [tab, setTab] = React.useState(() => {
     const asked = takePendingSettingsTab()
-    return asked && visibleSettingsTabs().some(t => t.id === asked) ? asked : 'profile'
+    return asked && visibleSettingsTabs().some(t => t.id === asked) ? asked : (readLastSettingsTab() || 'profile')
   })
+  React.useEffect(() => { rememberSettingsTab(tab) }, [tab])
   useObserveOnSettingsChange(tab)
   // "Open Settings on this tab" from elsewhere (a toast's Review button, the sidebar's sync badge).
   React.useEffect(() => {
@@ -446,6 +460,7 @@ export function DesktopSettings({ tweaks, setTweak, nav, defaultNavOrder }) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
+          <SettingsCollapseControls />
 
           {tab === 'profile' && (
             <>

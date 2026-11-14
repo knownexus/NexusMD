@@ -74,3 +74,47 @@ describe('the phone’s Profiles page', () => {
     expect(within(card('Account')).queryByRole('button', { name: /sync now/i })).toBeNull()
   })
 })
+
+describe('the tablet remembers the Settings page for the session', () => {
+  const sync = () => ({
+    status: vi.fn(status), onApplied: vi.fn(() => () => {}), lastSyncAt: vi.fn(() => null),
+    push: vi.fn(async () => ({ pushed: 0, conflicts: 0 })), pull: vi.fn(async () => ({ applied: 0 })),
+    conflicts: vi.fn(() => []), onConflict: vi.fn(() => () => {}),
+  })
+  afterEach(() => sessionStorage.clear())
+
+  it('writes the page down in session storage, never under a synced key', () => {
+    open(sync()) // the helper clicks Profiles
+    expect(sessionStorage.getItem('helm.settings.page')).toBe('profiles')
+    expect(localStorage.getItem('helm.settings.page')).toBeNull()
+  })
+
+  it('opens on the page it was left on', async () => {
+    sessionStorage.setItem('helm.settings.page', 'profiles')
+    const storage = {
+      getItem: k => ({ 'helm.profiles': JSON.stringify(PROFILES), 'helm.activeProfileId': 'W' })[k] ?? localStorage.getItem(k),
+      setItem: (k, v) => localStorage.setItem(k, v), removeItem: k => localStorage.removeItem(k), length: 0, key: () => null,
+    }
+    render(
+      <ProfileProvider namespace="helm" lifecycle store={{}} storage={storage}>
+        <AccountContext.Provider value={{ sync: sync(), session: { username: 'ann', role: 'user' }, signOut: async () => {} }}>
+          <SettingsView tweaks={{}} setTweak={() => {}} navGroups={[]} />
+        </AccountContext.Provider>
+      </ProfileProvider>,
+    )
+    expect(await screen.findByText('Profile sync')).toBeTruthy()
+  })
+
+  it('ignores a page that does not exist', async () => {
+    sessionStorage.setItem('helm.settings.page', 'gone')
+    render(
+      <ProfileProvider namespace="helm" lifecycle store={{}} storage={{ getItem: k => localStorage.getItem(k), setItem: () => {}, removeItem: () => {}, length: 0, key: () => null }}>
+        <AccountContext.Provider value={{ sync: sync(), session: null, signOut: async () => {} }}>
+          <SettingsView tweaks={{}} setTweak={() => {}} navGroups={[]} />
+        </AccountContext.Provider>
+      </ProfileProvider>,
+    )
+    expect(screen.queryByText('Profile sync')).toBeNull()
+    expect(sessionStorage.getItem('helm.settings.page')).toBe('profile')
+  })
+})

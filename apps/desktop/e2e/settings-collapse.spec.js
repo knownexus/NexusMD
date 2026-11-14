@@ -7,7 +7,7 @@ test('Settings sections collapse from their title bar and stay collapsed after a
   const { win, close } = await launchApp()
   try {
     await win.getByText('Settings').first().click()
-    await win.getByText('Profiles', { exact: true }).click()
+    await win.locator('nav button', { hasText: 'Profiles' }).click()
     const backup = toggle(win, 'Backup & Restore')
     await expect(backup).toHaveAttribute('aria-expanded', 'true')
     await expect(win.getByText('Back up all profiles')).toBeVisible()
@@ -20,7 +20,7 @@ test('Settings sections collapse from their title bar and stay collapsed after a
 
     await win.reload()
     await win.getByText('Settings').first().click()
-    await win.getByText('Profiles', { exact: true }).click()
+    await win.locator('nav button', { hasText: 'Profiles' }).click()
     await expect(toggle(win, 'Backup & Restore')).toHaveAttribute('aria-expanded', 'false')
     await expect(win.getByText('Back up all profiles')).toBeHidden()
 

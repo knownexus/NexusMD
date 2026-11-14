@@ -11,6 +11,8 @@ const ALLOWED = [
   /^nexusmd\.account\./, /^nexusmd\.sec\./, /^nexusmd\.feature\./,
   // Machine keys: this install's own state, never user data.
   /^nexusmd\.sync\./, /^nexusmd\.oauth\.pending$/,
+  // Where this window left Settings (the tab), kept on this computer and not synced.
+  /^nexusmd\.settings\.tab$/,
   // Read-only device state the shell/core own: where profile files live.
   /^nexusmd\.profileDir$/,
   // This machine's record of the start-up move of shared data into profiles (never synced).
