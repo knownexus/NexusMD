@@ -76,6 +76,9 @@ export const account = {
   platform: 'windows',
   serverName: serverNameOf(API_BASE),
   reviewConflicts: () => openSettings('data'),
+  // With these a pull that touched only other profiles, or only settings the open screens can read again, does not reload the app.
+  activeProfileId: () => localStorage.getItem('nexusmd.activeProfileId'),
+  isLiveSafe: keyRegistry.isLiveSafe,
   deviceNameDefault,
   optOutKey: OPT_OUT_KEY,
   boundUserKey: USER_KEY,
