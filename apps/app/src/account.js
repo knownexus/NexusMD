@@ -3,6 +3,7 @@
 // Runs after profile-migration.js (main.jsx imports that first), so profile ids are final here.
 import { Device } from '@capacitor/device'
 import { createAccountClient, createAccountSync, createKeyRegistry, clearAccountLocalData, serverNameOf } from '@nexusmd/core'
+import { openSettings } from '@nexusmd/ui'
 import { secureStorageAdapter } from './adapters/secureStorage.js'
 import { getActiveProfileId } from './profile-keys.js'
 
@@ -83,6 +84,7 @@ export const account = {
   client, sessionStore, deviceStore, createSync,
   platform: 'android',
   serverName: serverNameOf(API_BASE),
+  reviewConflicts: () => openSettings('data'),
   // With these a pull that touched only other profiles does not reload the app.
   activeProfileId: getActiveProfileId,
   isLiveSafe: createKeyRegistry({ namespace: 'helm' }).isLiveSafe,

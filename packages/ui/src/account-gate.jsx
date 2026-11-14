@@ -395,6 +395,7 @@ function PendingPurgeNotice({ purge, exportBackup, onDiscard, onLater }) {
  *   platform: 'windows'|'android'|'web'|'other',
  *   deviceNameDefault: () => string, optOutKey: string,
  *   serverName?: string,              // the server's host, shown in Data & sync so it is clear where profiles go
+ *   reviewConflicts?: () => void,   // opens Settings › Data & sync: the conflict notice gets a Review button
  *   activeProfileId?: () => string|null,   // the profile in use: with isLiveSafe, lets a pull that touched only other
  *   isLiveSafe?: (id: string) => boolean },  // profiles, or only settings screens can re-read, skip the reload
  *   reloadOnApplied?: boolean, children: React.ReactNode }} props
@@ -502,8 +503,10 @@ export function AccountGate({ account, reloadOnApplied = true, children }) {
       }));
     }
     if (typeof sync.onConflict === 'function') {
+      // The app can offer a Review button that opens Data & sync (account.reviewConflicts).
+      const review = typeof account.reviewConflicts === 'function' ? { action: { label: 'Review', onClick: account.reviewConflicts } } : undefined;
       offs.push(sync.onConflict(({ count }) => toast(
-        `${count} sync conflict${count === 1 ? ' needs' : 's need'} your decision — Settings › Data & sync`, 'info')));
+        `${count} sync conflict${count === 1 ? ' needs' : 's need'} your decision — Settings › Data & sync`, 'info', review)));
     }
     if (typeof sync.pendingPurges === 'function') {
       const show = () => { setPurges(sync.pendingPurges()); setPurgesHidden(false); };
