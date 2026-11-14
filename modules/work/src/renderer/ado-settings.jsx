@@ -3,6 +3,7 @@ import { VsCard, SettField } from '@nexusmd/ui'
 import { getAdoConfig, saveAdoConfig, createAdoHttpAdapter } from './ado-client.js'
 import { settInputStyle } from './form-style.js'
 import { DisconnectButton } from './disconnect-button.jsx'
+import { adoStatus } from './connection-status.js'
 import { rendererLog, ignored } from '@nexusmd/core'
 
 const log = rendererLog('work', 'ado-settings')
@@ -70,7 +71,7 @@ export function AdoConnectionCard({ onRefreshData }) {
   const isError = status.startsWith('Error')
 
   return (
-    <VsCard title="Azure DevOps Connection" icon="settings" id="integrations-ado" flush={false}>
+    <VsCard title="Azure DevOps Connection" icon="settings" id="integrations-ado" flush={false} status={adoStatus(getAdoConfig())}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
           <input type="checkbox" checked={workItems} onChange={e => setWorkItems(e.target.checked)} />

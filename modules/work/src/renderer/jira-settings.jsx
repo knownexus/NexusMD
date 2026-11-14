@@ -7,6 +7,7 @@ import { settInputStyle } from './form-style.js'
 import { getJiraConfig, saveJiraConfig, createJiraHttpAdapter } from './jira-client.js'
 import { workStorage } from './work-storage.js'
 import { DisconnectButton } from './disconnect-button.jsx'
+import { jiraStatus, displayStatus } from './connection-status.js'
 
 const log = rendererLog('work', 'jira-settings')
 
@@ -91,7 +92,7 @@ export function JiraConnectionCard({ onRefreshData }) {
   const selected = new Set(splitKeys(keys).map(k => k.toUpperCase()))
 
   return (
-    <VsCard title="Jira Cloud Connection" icon="settings" id="integrations-jira" flush={false}>
+    <VsCard title="Jira Cloud Connection" icon="settings" id="integrations-jira" flush={false} status={jiraStatus(getJiraConfig())}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
           <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
@@ -168,7 +169,7 @@ export function WorkItemsDisplayCard() {
     try { localStorage.setItem(getProfileKey(DISPLAY_KEY), JSON.stringify(m)) } catch (err) { ignore(log, 'a Jira setting could not be saved (quota)', err, 'debug') }
   }
   return (
-    <VsCard title="Work Items Display" icon="list" id="integrations-work-display" flush={false}>
+    <VsCard title="Work Items Display" icon="list" id="integrations-work-display" flush={false} status={displayStatus(mode)}>
       <SettField label="When both ADO and Jira are connected" hint="Also switchable from the Work Items toolbar.">
         <div style={{ display: 'flex', gap: 6 }}>
           {[['merged', 'Merged'], ['separate', 'Separate']].map(([v, l]) => (

@@ -3,6 +3,7 @@ import { Icon, VsCard, VsSeg, SettField } from '@nexusmd/ui'
 import { buildConfig, resolveConnectionParams, buildConnectionString, connectionStringToFields, SQL_AUTH, AZURE_AD_INTERACTIVE } from '@nexusmd/core'
 import { dbManagerAdapter } from './db-manager-adapter.js'
 import { listSavedConnections, saveConnection, getConnectionSecret, deleteConnection } from './db-manager-config.js'
+import { databaseStatus } from './connection-status.js'
 
 // Text inputs in the connection form.
 const settInputStyle = {
@@ -331,7 +332,7 @@ export function DatabaseConnectionCard({ host }) {
   }
 
   return (
-    <VsCard title="Database Connections" icon="database" id="integrations-database" flush={false}>
+    <VsCard title="Database Connections" icon="database" id="integrations-database" flush={false} status={databaseStatus(connections.length)}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {connections.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
