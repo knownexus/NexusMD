@@ -433,9 +433,11 @@
 .m-app[data-device="phone"] .m-appbar.wrap .m-ab-lead { flex: 1 1 100%; }
 .m-app[data-device="phone"] .m-appbar.wrap .m-ab-actions { flex: 1 1 100%; justify-content: flex-start; gap: 8px; }
 
-/* ---------- Builds table: keep every column readable and swipe sideways (phone and narrow tablets) ---------- */
+/* ---------- Builds: a wide table swipes sideways on tablets; on a phone each build is a card that fits the screen ---------- */
 .m-app .m-bld-card { min-width: 1080px; }
-.m-app[data-device="phone"] .m-bld-card { min-width: 880px; }
+.m-app[data-device="phone"] .m-bld-card { min-width: 0; }
+.m-app[data-device="phone"] .m-bld-card .card-head { padding-left: 10px; padding-right: 10px; }
+.m-app[data-device="phone"] .m-bld-card .bld-pipe { padding-left: 22px !important; }
 
 /* ---------- Phone form fields are tall enough to tap ---------- */
 .m-app[data-device="phone"] .m-screen input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
