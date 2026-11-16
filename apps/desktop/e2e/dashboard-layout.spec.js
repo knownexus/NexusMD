@@ -15,7 +15,11 @@ async function start() {
   }
 }
 
-const tweaks = win => win.evaluate(() => JSON.parse(localStorage.getItem('nexusmd.tweaks') || '{}'))
+// The shell saves the tweaks under the profile's own key (nexusmd.p.<id>.tweaks); the seed was written to the plain one.
+const tweaks = win => win.evaluate(() => {
+  const key = Object.keys(localStorage).find(k => /\.p\..*tweaks$/.test(k)) || 'nexusmd.tweaks'
+  return JSON.parse(localStorage.getItem(key) || '{}')
+})
 const box = (win, key) => win.locator(`[data-key="${key}"]`).boundingBox()
 
 // react-grid-layout eases widgets into place over 200ms.
