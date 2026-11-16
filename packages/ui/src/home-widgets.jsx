@@ -11,7 +11,7 @@
 // Missing fields render as empty states; nothing here reads app globals or storage.
 import React from 'react';
 import {
-  WIDGET_CONFIG_TYPES, pageLabel, widgetShown, moveWidget, readTarget, shortcutTitle, shortcutSub, shortcutIcon, LINK_UNAVAILABLE,
+  rendererLog, ignore, WIDGET_CONFIG_TYPES, pageLabel, widgetShown, moveWidget, readTarget, shortcutTitle, shortcutSub, shortcutIcon, LINK_UNAVAILABLE,
 } from '@nexusmd/core';
 import { Sheet as DefaultSheet } from './app-components.jsx';
 import { Icon } from './icons.jsx';
@@ -19,6 +19,7 @@ import { Card, TimeWidget, NotesWidget, LatestBuild, LatestTest } from './dashbo
 import { TargetPicker } from './target-picker.jsx';
 
 const { useState, useEffect } = React;
+const log = rendererLog('core', 'home-widgets');
 const arr = (v) => (Array.isArray(v) ? v : []);
 const sameDay = (iso, d) => typeof iso === 'string' && iso.slice(0, 10) === d;
 function Row({ title, sub, onClick }) {
@@ -245,7 +246,8 @@ export function WidgetHost({ widgets = [], offScreens = [], ctx = {}, onEdit, on
     if (e.button != null && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch (_) { /* not every pointer can be captured */ }
+    // The drag still works uncaptured while the finger stays over the handle.
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch (err) { ignore(log, 'this pointer cannot be captured', err, 'debug'); }
     setDrag({ id, over: id });
   };
   const move = (e) => {
