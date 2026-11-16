@@ -50,3 +50,29 @@ export const WIDGET_CONFIG_TYPES = {
 export const widgetPage = (w) => (w && w.type === 'link' ? linkPage(w.config) : WIDGET_CONFIG_TYPES[w?.type]?.page) || undefined
 
 export const newWidgetsAfterSave = (list, w) => (list.some(x => x.id === w.id) ? list.map(x => (x.id === w.id ? w : x)) : [...list, w])
+
+// Moves the widget `fromId` to where `toId` is (after it when moving down the list, before it when moving up).
+// The list is unchanged when either is missing or they are the same.
+export function moveWidget(list, fromId, toId) {
+  const from = list.findIndex(x => x.id === fromId)
+  const to = list.findIndex(x => x.id === toId)
+  if (from < 0 || to < 0 || from === to) return list
+  const next = [...list]
+  const [w] = next.splice(from, 1)
+  next.splice(to, 0, w)
+  return next
+}
+
+// Moves a widget one step earlier (dir -1) or later (+1) past the next widget `shown` keeps (the ones Home
+// leaves out, such as those whose page is off, are stepped over, so every step visibly moves it).
+export function moveWidgetBy(list, id, dir, shown = () => true) {
+  const i = list.findIndex(x => x.id === id)
+  if (i < 0) return list
+  for (let j = i + dir; j >= 0 && j < list.length; j += dir) {
+    if (shown(list[j])) return moveWidget(list, id, list[j].id)
+  }
+  return list
+}
+
+// Whether Home shows a widget: one of a known type whose page is not in offScreens.
+export const widgetShown = (w, offScreens = []) => !!w && !!WIDGET_CONFIG_TYPES[w.type] && !offScreens.includes(widgetPage(w))

@@ -11,7 +11,7 @@
 // Missing fields render as empty states; nothing here reads app globals or storage.
 import React from 'react';
 import {
-  WIDGET_CONFIG_TYPES, pageLabel, widgetPage, readTarget, shortcutTitle, shortcutSub, shortcutIcon, LINK_UNAVAILABLE,
+  WIDGET_CONFIG_TYPES, pageLabel, widgetShown, moveWidget, readTarget, shortcutTitle, shortcutSub, shortcutIcon, LINK_UNAVAILABLE,
 } from '@nexusmd/core';
 import { Sheet as DefaultSheet } from './app-components.jsx';
 import { Icon } from './icons.jsx';
@@ -206,6 +206,8 @@ export const WIDGET_TYPES = Object.fromEntries(
 );
 
 const WIDTHS = [['half', 'Half width'], ['full', 'Full width']];
+// readTarget keeps only the target, so a File-or-folder shortcut's Width is put back beside it.
+const withWidth = (target, width) => (WIDTHS.some(([v]) => v === width) ? { ...target, width } : target);
 const widthOf = (w) => w.config?.width || (WIDGET_TYPES[w.type]?.half ? 'half' : 'full');
 
 // One widget as it shows on Home, with its ⋯ (settings) button: what WidgetHost puts in each cell, and what
@@ -227,20 +229,71 @@ export function WidgetBody({ widget: w, ctx = {}, onEdit }) {
 
 // ── Host: the widgets, in a grid so half-width ones sit side by side ─────────────────────────────────────────
 // Widgets of an unknown type, or whose page is in offScreens, are skipped.
-export function WidgetHost({ widgets = [], offScreens = [], ctx = {}, onEdit }) {
-  const shown = arr(widgets).filter(w => w && WIDGET_TYPES[w.type] && !offScreens.includes(widgetPage(w)));
+// While `arranging` (with onReorder(nextList)), each widget is covered by a handle: drag it onto another widget
+// to move it there (touch, pen or mouse). The handle takes the touch for itself, so the page neither scrolls
+// nor pulls to refresh, and the widget underneath is not tapped.
+export function WidgetHost({ widgets = [], offScreens = [], ctx = {}, onEdit, onReorder, arranging = false }) {
+  const [drag, setDrag] = useState(null); // { id, over }
+  const shown = arr(widgets).filter(w => widgetShown(w, offScreens));
   if (!shown.length) return null;
   const x = ctx || {};
+  const overAt = (e) => {
+    const el = typeof document !== 'undefined' && document.elementFromPoint?.(e.clientX, e.clientY);
+    return el?.closest?.('[data-widget-id]')?.getAttribute('data-widget-id') || null;
+  };
+  const start = (e, id) => {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch (_) { /* not every pointer can be captured */ }
+    setDrag({ id, over: id });
+  };
+  const move = (e) => {
+    if (!drag) return;
+    const over = overAt(e);
+    if (over && over !== drag.over) setDrag(d => (d ? { ...d, over } : d));
+  };
+  const end = () => {
+    if (drag && drag.over && drag.over !== drag.id) onReorder?.(moveWidget(arr(widgets), drag.id, drag.over));
+    setDrag(null);
+  };
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', columnGap: 12 }}>
-      {shown.map(w => (
-        <div key={w.id} style={{ gridColumn: widthOf(w) === 'half' ? 'span 1' : 'span 2', minWidth: 0, position: 'relative' }}>
-          <WidgetBody widget={w} ctx={x} onEdit={onEdit}/>
-        </div>
-      ))}
+      {shown.map(w => {
+        const dragging = drag?.id === w.id;
+        const target = drag && drag.over === w.id && !dragging;
+        return (
+          <div key={w.id} data-widget-id={w.id} data-testid="home-widget"
+            style={{
+              gridColumn: widthOf(w) === 'half' ? 'span 1' : 'span 2', minWidth: 0, position: 'relative',
+              opacity: dragging ? 0.5 : 1, borderRadius: 12,
+              outline: target ? '2px dashed var(--accent)' : 'none', outlineOffset: -2,
+            }}>
+            <WidgetBody widget={w} ctx={x} onEdit={onEdit}/>
+            {arranging && onReorder && (
+              <div role="button" tabIndex={0} aria-label={`Move ${widgetName(w)} widget`} title="Drag onto another widget to move it there"
+                style={{
+                  position: 'absolute', inset: 0, bottom: 12, zIndex: 2, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'color-mix(in srgb, var(--surface) 55%, transparent)', border: '1px dashed var(--border)',
+                  touchAction: 'none', userSelect: 'none', cursor: dragging ? 'grabbing' : 'grab', color: 'var(--text-muted)',
+                }}
+                onPointerDown={e => start(e, w.id)} onPointerMove={move} onPointerUp={end} onPointerCancel={() => setDrag(null)}
+                onTouchStart={e => e.stopPropagation()} onTouchMove={e => e.stopPropagation()} onTouchEnd={e => e.stopPropagation()}>
+                <Icon name="grip" size={20}/>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
+
+const widgetName = (w) => {
+  const t = WIDGET_TYPES[w.type];
+  const c = { ...t.defaults, ...(w.config || {}) };
+  return t.title ? t.title(c) : t.label;
+};
 
 // ── Add / edit ─────────────────────────────────────────────────────────────────────────────────────────────────
 const inputStyle = { width: '100%', height: 40, padding: '0 10px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', font: 'inherit' };
@@ -269,7 +322,9 @@ function RepoPicker({ value, onPick, listRepoChoices }) {
 // `targetSources` is what lets a host create File-or-folder shortcuts here (what each kind can choose from: see
 // target-picker.jsx); without it that type is not offered (the shortcuts a host pins from its viewers are still shown,
 // and editable here).
-export function WidgetSheet({ open, widget, offScreens = [], onClose, onSave, onRemove, Sheet = DefaultSheet, listRepoChoices, targetSources, showWidth = true }) {
+// With onMove(widget, dir), editing also offers Move earlier (-1) / Move later (+1); canMove(widget, dir) greys
+// out a step that has nowhere to go.
+export function WidgetSheet({ open, widget, offScreens = [], onClose, onSave, onRemove, onMove, canMove, Sheet = DefaultSheet, listRepoChoices, targetSources, showWidth = true }) {
   const editing = !!widget;
   const [type, setType] = useState(null);
   const [config, setConfig] = useState({});
@@ -337,10 +392,20 @@ export function WidgetSheet({ open, widget, offScreens = [], onClose, onSave, on
               </select>
             </label>
           )}
+          {editing && onMove && (
+            <div className="m-fld"><span>Position on Home</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn m-btn-lg" style={{ flex: 1, justifyContent: 'center' }} disabled={canMove ? !canMove(widget, -1) : false}
+                  onClick={() => onMove(widget, -1)}>Move earlier</button>
+                <button type="button" className="btn m-btn-lg" style={{ flex: 1, justifyContent: 'center' }} disabled={canMove ? !canMove(widget, 1) : false}
+                  onClick={() => onMove(widget, 1)}>Move later</button>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             {editing && <button type="button" className="btn m-btn-lg" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => onRemove(widget)}>Remove</button>}
             <button type="button" className="btn primary m-btn-lg" style={{ flex: 1 }} disabled={!ready}
-              onClick={() => onSave({ id: widget?.id || 'w' + Date.now().toString(36), type, config: t.needsTarget ? readTarget(config) : config })}>{editing ? 'Save' : 'Add widget'}</button>
+              onClick={() => onSave({ id: widget?.id || 'w' + Date.now().toString(36), type, config: t.needsTarget ? withWidth(readTarget(config), config.width) : config })}>{editing ? 'Save' : 'Add widget'}</button>
           </div>
         </div>
       )}

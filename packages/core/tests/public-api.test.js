@@ -155,7 +155,7 @@ const EXPECTED = [
   'FIELD_DEFS', 'DEFAULT_STATUSES', 'DEFAULT_FIELDS', 'PRIORITY_LABELS', 'BUCKET_ORDER', 'BUCKET_LABELS',
   'toBucket', 'readLists', 'writeLists', 'newListId', 'safeListUrl',
   // Home widget configuration
-  'WIDGET_PAGES', 'pageLabel', 'WIDGET_CONFIG_TYPES', 'newWidgetsAfterSave', 'widgetPage',
+  'WIDGET_PAGES', 'pageLabel', 'WIDGET_CONFIG_TYPES', 'newWidgetsAfterSave', 'widgetPage', 'moveWidget', 'moveWidgetBy', 'widgetShown',
   // Dashboard shortcuts to a file, folder or document
   'LINK_TARGETS', 'DOC_TOOLS', 'LINK_UNAVAILABLE', 'normalizeRepoPath', 'normalizeRemote', 'remoteFromRemotes', 'repoKeys', 'githubRepoOf', 'cloneRepoIdentity', 'resolveRepo',
   'readTarget', 'targetPlace', 'savedDocList', 'savedDocIds', 'childrenAt', 'linkPage', 'shortcutTitle', 'shortcutSub', 'shortcutIcon', 'linkId', 'makeLinkWidget', 'resolveLink',
