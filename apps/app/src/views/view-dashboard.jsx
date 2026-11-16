@@ -6,7 +6,7 @@ import { HelmData, HelmApi } from '../data.jsx';
 import { refreshNow } from '../refresh.js';
 import { appQueue } from '../offline-queue-app.js';
 import { PullRefresh } from '../pull-refresh.jsx';
-import { syncLabel, offlineText, newWidgetsAfterSave } from '@nexusmd/core';
+import { syncLabel, offlineText, newWidgetsAfterSave, moveWidgetBy, widgetShown } from '@nexusmd/core';
 import { WidgetHost, WidgetSheet } from './home-widgets.jsx';
 
 // Jira ids are stored as 'jira:TFP-123'; show the key.
@@ -40,6 +40,12 @@ function DashboardView({
   // Tiles drill down in place; null shows the default Blockers / Needs-review cards.
   const [drill, setDrill] = useState(null);
   const [widgetSheet, setWidgetSheet] = useState(null);
+  // Arrange mode: each added widget gets a drag handle (see WidgetHost).
+  const [arranging, setArranging] = useState(false);
+  const shownWidgets = homeWidgets.filter(w => widgetShown(w, offScreens));
+  const isShown = w => widgetShown(w, offScreens);
+  const canMove = (w, dir) => moveWidgetBy(homeWidgets, w.id, dir, isShown) !== homeWidgets;
+  const moveBy = (w, dir) => setHomeWidgets?.(moveWidgetBy(homeWidgets, w.id, dir, isShown));
   const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine !== false);
   // Changes kept for later, and a clock so "Updated 2m ago" keeps moving.
   const [pending, setPending] = useState(() => appQueue.count());
@@ -276,11 +282,24 @@ function DashboardView({
 
         {/* Optional widgets, added from the menu */}
         <WidgetHost widgets={homeWidgets} offScreens={offScreens} onEdit={w => setWidgetSheet({ widget: w })}
+          arranging={arranging} onReorder={next => setHomeWidgets?.(next)}
           ctx={{ navTo, onOpenPR, onOpenItem, team, calendarEvents, plannerData, isTerminalState, needsMe: p => effectiveNeedsMe(p, needsMeCriteria) }}/>
-        <button type="button" className="btn m-btn-lg" style={{ width: '100%', justifyContent: 'center', marginBottom: 12 }}
-          onClick={() => setWidgetSheet({ widget: null })}><Icon name="plus" size={14}/> Add widget</button>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          {!arranging && (
+            <button type="button" className="btn m-btn-lg" style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => setWidgetSheet({ widget: null })}><Icon name="plus" size={14}/> Add widget</button>
+          )}
+          {shownWidgets.length > 1 && (
+            <button type="button" className={`btn m-btn-lg${arranging ? ' primary' : ''}`} style={{ flex: 1, justifyContent: 'center' }}
+              aria-pressed={arranging} onClick={() => setArranging(a => !a)}>
+              <Icon name={arranging ? 'check' : 'grip'} size={14}/> {arranging ? 'Done' : 'Arrange'}
+            </button>
+          )}
+        </div>
+        {arranging && <div className="m-row-sub" style={{ marginTop: -4, marginBottom: 12, textAlign: 'center' }}>Drag a widget onto another to move it there</div>}
         <WidgetSheet open={!!widgetSheet} widget={widgetSheet?.widget || null} offScreens={offScreens}
           onClose={() => setWidgetSheet(null)}
+          onMove={(w, dir) => moveBy(w, dir)} canMove={canMove}
           onSave={w => { setHomeWidgets?.(newWidgetsAfterSave(homeWidgets, w)); setWidgetSheet(null); }}
           onRemove={w => { setHomeWidgets?.(homeWidgets.filter(x => x.id !== w.id)); setWidgetSheet(null); }}/>
 
