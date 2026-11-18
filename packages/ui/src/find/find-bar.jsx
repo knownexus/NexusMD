@@ -6,7 +6,7 @@ const btn = { border: '1px solid var(--border)', background: 'var(--surface)', c
 
 export function FindBar({ find, className = '', style }) {
   const input = React.useRef(null)
-  React.useEffect(() => { if (find.open) { input.current?.focus(); input.current?.select() } }, [find.open])
+  React.useEffect(() => { if (find.open) { input.current?.focus(); input.current?.select() } }, [find.open, find.focusTick])
   if (!find.open) return null
   const { query, count, index, matchCase } = find
   const status = !query ? '' : count === 0 ? 'No matches' : count >= FIND_LIMIT ? `${index + 1} of ${FIND_LIMIT}+` : `${index + 1} of ${count}`

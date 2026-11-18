@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, cleanup, act, waitFor } from '@testing-library/react'
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { useFind, useDomFind } from '../src/index.js'
 
 afterEach(cleanup)
@@ -76,6 +76,18 @@ describe('useDomFind', () => {
     // What MarkdownPreview does when highlight.js finishes loading: it rewrites its element, text unchanged.
     act(() => { screen.getByTestId('root').innerHTML = '<p>foo foo foo</p>' })
     await waitFor(() => expect(marks()).toHaveLength(3))
+    expect(state().startsWith('3/')).toBe(true)
+  })
+  it('with the highlight API, puts the highlights back when the content is re-rendered under it', async () => {
+    const highlights = new Map()
+    vi.stubGlobal('CSS', { highlights })
+    vi.stubGlobal('Highlight', class extends Set { constructor(...r) { super(r) } })
+    render(<Host html="<p>foo</p>" />)
+    act(() => { api.setOpen(true); api.setQuery('foo') })
+    expect(highlights.get('nx-find-hit').size).toBe(1)
+    // The live range collapses onto the root when its text is replaced; the root itself stays in the page.
+    act(() => { screen.getByTestId('root').innerHTML = '<p>foo foo foo</p>' })
+    await waitFor(() => expect(highlights.get('nx-find-hit').size).toBe(3))
     expect(state().startsWith('3/')).toBe(true)
   })
 })

@@ -125,5 +125,19 @@ describe('useFindShortcut', () => {
     unmount()
     press()
     expect(find.setOpen).not.toHaveBeenCalled()
+  })})
+
+describe('FindBar when opened again', () => {
+  it('moves focus back to the query box when asked to open while already open', () => {
+    let api
+    function Host() { api = useFind(); return <><button data-testid="other">x</button><FindBar find={api} /></> }
+    render(<Host />)
+    act(() => api.setOpen(true))
+    const input = screen.getByLabelText('Find in file')
+    expect(document.activeElement).toBe(input)
+    screen.getByTestId('other').focus()
+    expect(document.activeElement).not.toBe(input)
+    act(() => api.setOpen(true))
+    expect(document.activeElement).toBe(input)
   })
 })

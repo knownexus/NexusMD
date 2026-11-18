@@ -56,8 +56,9 @@ function highlight(root, query, matchCase) {
   return { count: hits.length, hits, clear, api }
 }
 
-// A mark, or a highlight range, that is still in the page.
-const alive = h => (h.isConnected !== undefined ? h.isConnected : !!h.startContainer?.isConnected)
+// A mark, or a highlight range, that still covers its text in the page. A range whose text was replaced collapses onto
+// the element it was in, which is still in the page, so a range counts only while it spans text.
+const alive = h => (h.isConnected !== undefined ? h.isConnected : !h.collapsed && h.startContainer.nodeType === 3 && h.startContainer.isConnected)
 
 function showCurrent(run, index) {
   if (!run) return
