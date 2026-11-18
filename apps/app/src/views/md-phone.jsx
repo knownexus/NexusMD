@@ -4,6 +4,7 @@
 import React from 'react';
 import { MarkdownPreview, MarkdownDiff, generateId, useFind, FindBar, useFindShortcut, useDomFind, useTextareaFind } from '@nexusmd/ui';
 import { Icon } from '../icons.jsx';
+import { FIND_BAR_STYLE } from '../find-bar-style.js';
 import { pickerAdapter } from '../adapters/picker.js';
 import { Sheet } from '../components.jsx';
 import { ToolFrame, DocsSheet, PinDocButton } from './docs-frame.jsx';
@@ -151,7 +152,7 @@ export function MarkdownPhone({ tool, setTool, onFlash, openDocId = null }) {
           </div>
         )}>
         <div ref={frameRef} style={{ display: 'contents' }}/>
-        <FindBar find={find} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid var(--border)' }}/>
+        <FindBar find={find} style={FIND_BAR_STYLE}/>
         <div className="m-seg" style={{ margin: '0 0 10px' }}>
           <button type="button" className={mode === 'edit' ? 'active' : ''} onClick={() => setMode('edit')}>Edit</button>
           <button type="button" className={mode === 'preview' ? 'active' : ''} onClick={() => setMode('preview')}>Preview</button>

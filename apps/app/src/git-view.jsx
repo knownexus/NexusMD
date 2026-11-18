@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { timeAgo, resolveRepo, targetPlace, findMatches, splitAtMatches, FIND_LIMIT } from '@nexusmd/core';
 import { MarkdownPreview, pinToHome, useFind, FindBar, useFindShortcut, useDomFind, ensureFindStyle } from '@nexusmd/ui';
 import { Icon } from './icons.jsx';
+import { FIND_BAR_STYLE } from './find-bar-style.js';
 import { toast } from './toast.jsx';
 import { Sheet } from './components.jsx';
 import { adoGet, getAdoConfig } from './ado-client.js';
@@ -108,7 +109,7 @@ function FileViewer({ repo, branch, path, onBack, onFlash, onPin }) {
         </div>
       </div>
       <div className="m-screen" ref={screenRef}>
-        <FindBar find={find} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid var(--border)' }}/>
+        <FindBar find={find} style={FIND_BAR_STYLE}/>
         {md && (
           <div className="m-seg" style={{ marginBottom: 12 }}>
             <button type="button" className={!raw ? 'active' : ''} onClick={() => setRaw(false)}>Rendered</button>

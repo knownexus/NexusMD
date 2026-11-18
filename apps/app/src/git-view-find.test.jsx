@@ -77,4 +77,13 @@ describe('Git file viewer find', () => {
     await waitFor(() => expect(document.querySelectorAll('.m-code mark[data-find]')).toHaveLength(2))
     expect((screen.getByRole('search').querySelector('input')).value).toBe('foo')
   })
+  it('keeps the bar pinned to the top of the scrolling screen, so jumping to a match does not scroll it away', async () => {
+    render(<GitView />)
+    await openFile('a.txt')
+    await screen.findByText(/qux/)
+    openFind()
+    const bar = screen.getByRole('search')
+    expect(bar.style.position).toBe('sticky')
+    expect(bar.style.top).toBe('0px')
+  })
 })

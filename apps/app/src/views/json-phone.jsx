@@ -3,6 +3,7 @@
 import React from 'react';
 import { useDocumentAutosave, JsonNodeSheet, useFind, FindBar, useFindShortcut, useTextareaFind } from '@nexusmd/ui';
 import { Icon } from '../icons.jsx';
+import { FIND_BAR_STYLE } from '../find-bar-style.js';
 import { toast } from '../toast.jsx';
 import { ToolFrame, DocsSheet, PinDocButton } from './docs-frame.jsx';
 import { jsonAutoName, typeOf, searchPaths, pathKey, isContainer } from '@nexusmd/core';
@@ -117,7 +118,7 @@ export function JsonPhone({ tool, setTool, onFlash, openDocId = null }) {
           </div>
         )}>
         <div ref={frameRef} style={{ display: 'contents' }}/>
-        <FindBar find={find} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid var(--border)' }}/>
+        <FindBar find={find} style={FIND_BAR_STYLE}/>
         <div className="m-seg" style={{ margin: '0 0 10px' }}>
           <button type="button" className={mode === 'edit' ? 'active' : ''} onClick={() => setMode('edit')}>Edit</button>
           <button type="button" className={mode === 'tree' ? 'active' : ''} onClick={() => setMode('tree')}>Tree</button>
