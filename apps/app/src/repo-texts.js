@@ -22,9 +22,10 @@ export function clearRepoTexts(repoId) {
 /**
  * The in-scope files of `branch` with their texts: { files: [{ path, text }], commit, via: 'files' | 'zip', total }.
  * `total` is how many files are in scope; files that cannot be read as text are left out of `files`.
- * `onProgress({ done, total })` is called while files are fetched one by one. Rejects with an AbortError when `signal` aborts.
+ * `onProgress({ done, total })` is called while files are fetched one by one. `confirm({ total })` is awaited before a
+ * zip is downloaded; false cancels. Rejects with an AbortError when `signal` aborts or the download is declined.
  */
-export async function loadRepoTexts({ backend, repo, branch, scope = {}, signal = null, onProgress = null }) {
+export async function loadRepoTexts({ backend, repo, branch, scope = {}, signal = null, onProgress = null, confirm = null }) {
   const { files: all, commit } = await backend.listTree(repo, branch);
   check(signal);
   const wanted = all.filter(p => inScope(p, scope));
@@ -54,6 +55,9 @@ export async function loadRepoTexts({ backend, repo, branch, scope = {}, signal 
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missing.length) }, worker));
     check(signal);
   } else if (missing.length) {
+    // A download is asked about first, since it can be large; one already downloaded for this commit is not.
+    if (confirm && !(await confirm({ total }))) throw aborted();
+    check(signal);
     const wantedSet = new Set(wanted);
     const unpacked = await backend.downloadZip(repo, branch, { signal, include: (p) => wantedSet.has(p) });
     check(signal);

@@ -5,6 +5,7 @@ import { timeAgo, resolveRepo, targetPlace, findMatches, splitAtMatches, FIND_LI
 import { MarkdownPreview, pinToHome, useFind, FindBar, useFindShortcut, useDomFind, ensureFindStyle } from '@nexusmd/ui';
 import { Icon } from './icons.jsx';
 import { FIND_BAR_STYLE } from './find-bar-style.js';
+import { RepoSearch, forgetRepoSearch } from './views/repo-search.jsx';
 import { toast } from './toast.jsx';
 import { Sheet } from './components.jsx';
 import { adoGet, adoGetBinary, getAdoConfig } from './ado-client.js';
@@ -58,7 +59,8 @@ function RepoRow({ repo, onOpen }) {
   );
 }
 
-function FileViewer({ repo, branch, path, onBack, onFlash, onPin }) {
+// `line`, `findQuery` and `jumpToken` come from a search result: open on that line, with the term in the find bar.
+function FileViewer({ repo, branch, path, onBack, onFlash, onPin, line = null, findQuery = null, jumpToken = null }) {
   const [text, setText] = useState(null);
   const [error, setError] = useState('');
   const [wrap, setWrap] = useState(false);
@@ -89,6 +91,20 @@ function FileViewer({ repo, branch, path, onBack, onFlash, onPin }) {
     });
     return { per, total };
   }, [lines, text, rendered, find.open, find.query, find.matchCase]);
+  // A search result: its line numbers are the source's, so a Markdown file shows raw; the find bar opens on the term and
+  // the current match is the one on the clicked line.
+  const jumped = useRef(null);
+  useEffect(() => { if (line) setRaw(true); }, [line, jumpToken]);
+  useEffect(() => {
+    if (!findQuery || text === null) return;
+    find.setQuery(findQuery); find.setOpen(true);
+  }, [findQuery, jumpToken, text === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!line || !plain || jumped.current === jumpToken) return;
+    jumped.current = jumpToken;
+    const first = plain.per[line - 1]?.first;
+    if (first != null) find.goTo(first);
+  }, [plain, line, jumpToken]); // eslint-disable-line react-hooks/exhaustive-deps
   // After useDomFind's effect, which reports 0 while the code view is showing.
   useEffect(() => { if (!rendered) reportFind(plain ? plain.total : 0); }, [rendered, plain, reportFind]);
   useEffect(() => {
@@ -150,6 +166,8 @@ export function GitView({ onFlash }) {
   const [items, setItems] = useState(null);
   const [readme, setReadme] = useState(null);
   const [openFile, setOpenFile] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [jump, setJump] = useState(null);
   const [commits, setCommits] = useState(null);
   const [branchSheet, setBranchSheet] = useState(false);
   const [branchQuery, setBranchQuery] = useState('');
@@ -233,7 +251,7 @@ export function GitView({ onFlash }) {
   // call history.back) sets the screen from the entry it lands on.
   const layer = layerOf({
     repo, branch, tab, path, file: openFile,
-    sheet: commitSheet ? `commit:${commitSheet.id}` : branchSheet ? 'branch' : null,
+    sheet: commitSheet ? `commit:${commitSheet.id}` : branchSheet ? 'branch' : searching ? 'search' : null,
   });
   const layerKey = JSON.stringify(layer);
   useEffect(() => {
@@ -248,11 +266,13 @@ export function GitView({ onFlash }) {
   const applyLayer = (g, list) => {
     const r = g.repo && (list || []).find(x => x.id === g.repo);
     setBranchQuery('');
-    if (!r) { setRepo(null); setOpenFile(null); setBranchSheet(false); setCommitSheet(null); return; }
+    if (!r) { if (repo) forgetRepoSearch(repo.id); setRepo(null); setOpenFile(null); setBranchSheet(false); setCommitSheet(null); setSearching(false); return; }
     // The branch is a setting, not a place: going back within a repo keeps the one now chosen.
+    if (repo && repo.id !== r.id) forgetRepoSearch(repo.id);
     if (!repo || repo.id !== r.id) { setBranches(null); setCommits(null); setError(''); setBranch(g.branch); loadBranches(r, g.branch); }
     setRepo(r); setTab(g.tab); setPath(g.path); setOpenFile(g.file);
     setBranchSheet(g.sheet === 'branch');
+    setSearching(g.sheet === 'search');
     const commitId = g.sheet?.startsWith('commit:') ? g.sheet.slice(7) : null;
     setCommitSheet(commitId ? (commits || []).find(c => c.id === commitId) ?? null : null);
   };
@@ -292,7 +312,14 @@ export function GitView({ onFlash }) {
   });
 
   if (repo && openFile) {
-    return <FileViewer repo={repo} branch={branch} path={openFile} onBack={back} onFlash={onFlash} onPin={() => pin('file', openFile)}/>;
+    const mine = jump?.path === openFile ? jump : null;
+    return <FileViewer repo={repo} branch={branch} path={openFile} onBack={back} onFlash={onFlash} onPin={() => pin('file', openFile)}
+      line={mine?.line ?? null} findQuery={mine?.query ?? null} jumpToken={mine?.token ?? null}/>;
+  }
+
+  if (repo && branch && searching) {
+    return <RepoSearch backend={backend} repo={repo} branch={branch} onBack={back}
+      onOpen={(p, line, query) => { setJump({ path: '/' + p, line, query, token: Date.now() }); setOpenFile('/' + p); }}/>;
   }
 
   if (!repo) {
@@ -349,6 +376,9 @@ export function GitView({ onFlash }) {
         <button type="button" className="m-iconbtn" onClick={leaveRepo} aria-label="Back to repositories"><Icon name="chevron-left" size={18}/></button>
         <div className="m-ab-lead"><div><h1 style={{ fontSize: 17 }}>{repo.name}</h1><div className="m-ab-sub">{repo.project}</div></div></div>
         <div className="m-ab-actions">
+          {tab === 'files' && (
+            <button type="button" className="m-iconbtn" title="Search in files" aria-label="Search in files" disabled={!branch} onClick={() => setSearching(true)}><Icon name="search" size={17}/></button>
+          )}
           {tab === 'files' && (
             <button type="button" className="m-iconbtn" title="Pin to Home" aria-label="Pin this folder to Home" onClick={() => pin('folder', path)}><Icon name="pin" size={17}/></button>
           )}

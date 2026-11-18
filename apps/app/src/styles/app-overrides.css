@@ -177,3 +177,9 @@ button[style*="height:30"] { min-height: 44px !important; }
 }
 
 .fld input, .fld textarea, .fld select { padding: 8px 10px; }
+
+/* Search in files (Git): a result row is a line number and the line with the match marked. */
+.m-hit { display: flex; gap: 10px; width: 100%; align-items: baseline; text-align: left; font-family: var(--mono); font-size: 12px; background: none; border: 0; color: var(--text); }
+.m-hit-no { flex: none; min-width: 34px; text-align: right; color: var(--text-subtle); }
+.m-hit-tx { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.m-hit mark { background: rgba(255, 200, 0, .45); color: inherit; border-radius: 2px; }
