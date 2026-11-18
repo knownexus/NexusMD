@@ -72,7 +72,7 @@ const EXPECTED = [
   'createCollection', 'readCollectionMeta', 'writeCollectionMeta',
   'listRequestIds', 'readRequest', 'writeRequest', 'deleteRequest',
   'listEnvironmentNames', 'readEnvironment', 'writeEnvironment', 'deleteEnvironment',
-  'loadCollection', 'addTreeNode', 'removeTreeNode', 'findTreeNode', 'FIND_LIMIT', 'findMatches', 'stepIndex', 'splitAtMatches', 'flattenRequestRefs',
+  'loadCollection', 'addTreeNode', 'removeTreeNode', 'findTreeNode', 'FIND_LIMIT', 'SEARCH_CAPS', 'normaliseExtensions', 'inScope', 'cutLine', 'searchTexts', 'findMatches', 'stepIndex', 'splitAtMatches', 'flattenRequestRefs',
   'resolveVars', 'resolveObjectVars', 'resolveEnvironment',
   'secretStorageKey', 'setSecretVar', 'removeSecretVar',
   'buildRequest', 'executeRequest',
