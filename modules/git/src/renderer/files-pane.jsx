@@ -17,6 +17,7 @@ import { relativeTime } from './history-pane.jsx'
 import { Icon, Segmented, pinToHome } from '@nexusmd/ui'
 import { localPinTarget } from './shortcut-open.js'
 import { TextPreview } from './file-preview.jsx'
+import { RepoSearchPanel } from './repo-search-panel.jsx'
 import { ImageView } from './image-view.jsx'
 import { isImagePath } from './image-types.js'
 
@@ -156,7 +157,7 @@ function LocalRail({ path, change, d, worktreePath, version, onView, onWrite, on
 
 // The picked file: a path bar with File | Diff (Diff only for a changed file) and the file with its changed
 // lines tinted and a status footer, or the same diff as Changes.
-function LocalPreview({ path, change, d, worktreePath, version, repoName, view, onView, image }) {
+function LocalPreview({ path, change, d, worktreePath, version, repoName, view, onView, image, jump = null }) {
   const diff = useDiff({ adapter: d.adapter, repo: d.repo, worktreePath, registered: d.registered, change: image ? null : change, version })
   const marked = React.useMemo(() => addedLines(diff.files), [diff.files])
   const showDiff = !!change && !image && view === 'diff'
@@ -171,7 +172,7 @@ function LocalPreview({ path, change, d, worktreePath, version, repoName, view, 
         ? <div className="nx-gw-fx-pad"><ImageView name={path} loadKey={`${path}\0${version}`} load={() => d.adapter.readImage(d.repo, worktreePath, d.registered, path, 'working')} emptyText="This file isn’t there any more." /></div>
         : showDiff
           ? <div className="nx-gw-fx-diff"><DiffPane change={change} diff={diff} readOnly onHunk={() => {}} /></div>
-          : <TextPreview path={path} loadKey={version} markedLines={marked} showStatus load={() => d.adapter.readFile(d.repo, worktreePath, d.registered, path)} />}
+          : <TextPreview path={path} loadKey={version} markedLines={marked} showStatus line={jump?.line ?? null} findQuery={jump?.query ?? null} findToken={jump?.token ?? null} load={() => d.adapter.readFile(d.repo, worktreePath, d.registered, path)} />}
     </>
   )
 }
@@ -196,6 +197,8 @@ export function FilesPane({ adapter, host = null, repo, worktreePath, registered
   const [ask, setAsk] = React.useState(null)
   const [note, setNote] = React.useState(null)
   const [busy, setBusy] = React.useState(false)
+  // A search result that was opened: the file, the line to show and the term for the find bar.
+  const [jump, setJump] = React.useState(null)
   // Only the worktree's identity (and a new snapshot) lists the files again; the parent passes fresh-but-equal objects.
   const deps = React.useRef({ adapter, repo, registered })
   deps.current = { adapter, repo, registered }
@@ -296,7 +299,7 @@ export function FilesPane({ adapter, host = null, repo, worktreePath, registered
   ]
   const preview = path => (
     <LocalPreview key={path} path={path} change={changeFor(changes, path)} d={deps.current} worktreePath={worktreePath} version={version}
-      repoName={repo?.name || 'Repository'} view={viewOf()} onView={setView} image={isImagePath(path)} />
+      repoName={repo?.name || 'Repository'} view={viewOf()} onView={setView} image={isImagePath(path)} jump={jump?.path === path ? jump : null} />
   )
   const detailsFor = path => {
     if (!path) return <div className="nx-gw-crail"><div className="nx-gw-rail-note">Pick a file to see its details.</div></div>
@@ -319,6 +322,8 @@ export function FilesPane({ adapter, host = null, repo, worktreePath, registered
           <>
             <ChangedPin marks={marks} picked={picked} pick={pick} />
             <RecentPin recent={recent.recent} picked={picked} pick={pick} />
+            <RepoSearchPanel adapter={adapter} repo={repo} worktreePath={worktreePath} registered={registered}
+              onOpen={(path, line, query) => { setView('file'); setJump({ path, line: { line }, query, token: Date.now() }); pick(path) }} />
           </>
         )} footer={marks.files.size > 0 && <Legend marks={marks} />}
         emptyNote="To add files, drag them here from your file explorer. Drop them on a folder to put them in it."

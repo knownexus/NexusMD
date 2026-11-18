@@ -43,6 +43,19 @@ describe('FilesPane', () => {
     expect(screen.getByText('guide.md')).toBeTruthy()
   })
 
+  it('opens a search result in the preview with its term in the find bar', async () => {
+    const grep = vi.fn(async () => ({ results: [{ path: 'src/app.jsx', matches: [{ line: 2, text: 'two', start: 0, end: 3 }] }], capped: false }))
+    const { adapter } = setup({ extra: {} })
+    adapter.grep = grep
+    fireEvent.click(await screen.findByRole('button', { name: /search in files/i }))
+    fireEvent.change(screen.getByLabelText('Search text'), { target: { value: 'two' } })
+    fireEvent.keyDown(screen.getByLabelText('Search text'), { key: 'Enter' })
+    fireEvent.click((await screen.findByText('src/app.jsx')).closest('[role="group"]').querySelector('button'))
+    await waitFor(() => expect(adapter.readFile).toHaveBeenCalledWith(repo, repo.path, registered, 'src/app.jsx'))
+    await waitFor(() => expect(screen.getByLabelText('Find in file').value).toBe('two'))
+    expect(grep).toHaveBeenCalledWith(repo, repo.path, registered, 'two', { matchCase: false, folders: [], extensions: [] })
+  })
+
   it('copies files dropped on a folder into it, then refreshes', async () => {
     const { adapter, onImported } = setup()
     dropOn(await row('docs'), ['logo.png'])

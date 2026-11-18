@@ -51,4 +51,11 @@ describe('TextPreview find', () => {
     ctrlF()
     expect(screen.queryByLabelText('Find in file')).toBeNull()
   })
+  it('opens the find bar on a given term and jumps to a given line', async () => {
+    const { container } = render(<TextPreview path="a.txt" loadKey="1" line={{ line: 3 }} findQuery="foo" load={() => ({ text: ['one', 'two', 'foo three', 'foo'].join('\n') })} />)
+    await waitFor(() => expect(container.querySelector('.cm-content')).toBeTruthy())
+    expect(await screen.findByLabelText('Find in file')).toBeTruthy()
+    expect(screen.getByLabelText('Find in file').value).toBe('foo')
+    await waitFor(() => expect(container.querySelectorAll('.cm-find-hit')).toHaveLength(2))
+  })
 })
