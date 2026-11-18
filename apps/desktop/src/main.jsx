@@ -4,11 +4,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import '@nexusmd/ui/styles.css'
 
-import { initCore, createNoOpAdapters, profileCacheStorage, rendererLog, ignore } from '@nexusmd/core'
+import { initCore, createNoOpAdapters, profileCacheStorage, rendererLog, ignore, newWidgetsAfterSave } from '@nexusmd/core'
 import {
   Icon, CardFrame, NexusDataProvider, ToastHost,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakButton,
-  THEME_MODES, paletteFor, ProfileGate, AccountGate, toast,
+  THEME_MODES, paletteFor, ProfileGate, AccountGate, toast, listenForPins, OPEN_SETTINGS_EVENT,
 } from '@nexusmd/ui'
 import { startQueueFlushing } from './offline-queue-app.js'
 import { isBareStandalone, effectiveSidebar, ICON_RAIL_WIDTH, sidebarGroups, shortcutNav, SIDEBAR_BREAKPOINT, toggledSidebar, mountedViews } from './layout.js'
@@ -22,6 +22,8 @@ import { registerDeepLinks } from './shell/deep-links.js'
 import { startDesktopAutoSync } from './sync.js'
 import { INSTALLED_NAV, SETTINGS_NAV, ALL_NAV, DEFAULT_NAV_ORDER } from './nav-config.js'
 import { isUninstalledView, registry, resolveView } from './shell/registry.js'
+import { refreshFromPrefs } from './shell/apps-disabled.js'
+import { appPrefsAdapter } from './adapters/appPrefs.js'
 import {
   localStorageAdapter, networkAdapter, lifecycleAdapter, themeAdapter,
   clipboardAdapter, shareAdapter, notificationAdapter,
@@ -206,16 +208,39 @@ function App() {
   React.useEffect(() => { setNavShown(false) }, [view])
   const navHidden = BARE || (NAV_HIDDEN.has(view) && !navShown)
 
+  // Which apps are switched off follows the saved list (it may have changed since this window started, for instance by
+  // a settings import), so turning an app on or off shows at once.
+  React.useEffect(() => { refreshFromPrefs(appPrefsAdapter) }, [])
+
   // The window, and so the taskbar, is named for what is installed.
   React.useEffect(() => { document.title = registry.identity.productName }, [])
 
+  // A value may be a function of the one before it, for changes that must not overwrite each other.
   const setTweak = React.useCallback((key, value) => {
     setTweaksState(prev => {
-      const next = { ...prev, [key]: value }
+      const next = { ...prev, [key]: typeof value === 'function' ? value(prev[key]) : value }
       try { localStorage.setItem(getProfileKey('nexusmd.tweaks'), JSON.stringify(next)) } catch (err) { ignore(log, 'the tweaks could not be saved (storage full or blocked)', err, 'warn') }
       return next
     })
   }, [])
+
+  // Settings that arrive from another computer (a page hidden there, a changed layout) are taken in without a reload: the account
+  // sync announces them (see AccountGate) and the saved tweaks are read again.
+  React.useEffect(() => {
+    const onSyncApplied = (e) => { if (e.detail?.collId === 'tweaks') setTweaksState(loadTweaks()) }
+    document.addEventListener('nexusmd:sync-applied', onSyncApplied)
+    return () => document.removeEventListener('nexusmd:sync-applied', onSyncApplied)
+  }, [])
+
+  // "Pin to Dashboard" from an app's own screen (a repo file, a document, an Editor file): the shortcut joins the Home
+  // widgets, or is left as it is when that exact place is already there.
+  const tweaksRef = React.useRef(tweaks)
+  tweaksRef.current = tweaks
+  React.useEffect(() => listenForPins(widget => {
+    const had = (Array.isArray(tweaksRef.current.homeWidgets) ? tweaksRef.current.homeWidgets : []).some(x => x.id === widget.id)
+    setTweak('homeWidgets', list => newWidgetsAfterSave(Array.isArray(list) ? list : [], widget))
+    toast(had ? 'Already on the Dashboard' : 'Pinned to the Dashboard', 'success')
+  }, 'desktop'), [setTweak])
 
   React.useEffect(() => {
     document.body.dataset.theme = paletteFor(tweaks)
@@ -252,6 +277,13 @@ function App() {
     }
     window.addEventListener('nexusmd:navigate', handler)
     return () => window.removeEventListener('nexusmd:navigate', handler)
+  }, [])
+
+  // openSettings(tab) from anywhere shows Settings; DesktopSettings picks the tab.
+  React.useEffect(() => {
+    const onOpen = () => setView(SETTINGS_NAV.id)
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen)
   }, [])
 
   // What the sidebar shows, in its groups and order; the number keys jump to the entry with that number,

@@ -4,7 +4,7 @@ import {
   VsRow, VsCard, VsFullRow, ThemeModeSettings,
   VsProfiles, BackupRestoreCard, CloudSyncCard, IntegrationsView, AccountCard, SyncStatusCard, RecoveredCopiesCard, SyncConflictsCard,
   PlToggle,
-  toast,
+  toast, takePendingSettingsTab, OPEN_SETTINGS_EVENT, SettingsCollapseControls,
 } from '@nexusmd/ui'
 import { graphJSON, rendererLog, ignore, ignored } from '@nexusmd/core'
 import { appPrefsAdapter } from './adapters/appPrefs.js'
@@ -21,6 +21,7 @@ import { desktopCloudProviders, makeNativeGoogleBinding, makeNativeMicrosoftBind
 import { desktopSync } from './sync.js'
 import { isLegacyCloudSyncOn, setLegacyCloudSyncOn } from './legacy-cloud-sync.js'
 import { moduleSettingsCards, modulePanels } from './shell/modules.js'
+import { useDisabledApps } from './shell/apps-disabled.js'
 import { registry } from './shell/registry.js'
 import { host } from './shell/host.js'
 import { pickerAdapter } from './adapters/picker.js'
@@ -124,6 +125,7 @@ export function DesktopAppCard() {
 }
 
 export function DesktopDataSyncCard() {
+  useDisabledApps()
   const [kbUsed, setKbUsed] = React.useState(0)
   const [legacyOn, setLegacyOn] = React.useState(isLegacyCloudSyncOn)
   const toggleLegacy = (on) => {
@@ -157,7 +159,7 @@ export function DesktopDataSyncCard() {
   }
 
   return (
-    <VsCard title="Data & sync" icon="dashboard">
+    <VsCard title="Local data" icon="dashboard">
       <VsRow title="Local storage used" desc="Approximate size of all NexusMD data in this profile">
         <span style={{ fontSize: 13, fontFamily: 'var(--mono)' }}>{kbUsed} KB</span>
       </VsRow>
@@ -398,11 +400,38 @@ const TAB_NEEDS = { planner: ['planner', 'work'], cards: ['work'], confidential:
 export const visibleSettingsTabs = (reg = registry) =>
   SETTINGS_TABS.filter(t => !TAB_NEEDS[t.id] || TAB_NEEDS[t.id].some(id => reg.isInstalled(id)))
 
+// The tab Settings was last left on, kept on this computer (not synced: it is where this window was, not a preference).
+const LAST_TAB_KEY = 'nexusmd.settings.tab'
+export function readLastSettingsTab(reg = registry) {
+  try {
+    const t = localStorage.getItem(LAST_TAB_KEY)
+    return t && visibleSettingsTabs(reg).some(x => x.id === t) ? t : null
+  } catch (err) { ignore(log, 'the last Settings tab could not be read, so Settings opens on Profile', err, 'debug'); return null }
+}
+function rememberSettingsTab(tab) {
+  try { localStorage.setItem(LAST_TAB_KEY, tab) } catch (err) { ignore(log, 'the Settings tab could not be remembered', err, 'debug') }
+}
+
 export function DesktopSettings({ tweaks, setTweak, nav, defaultNavOrder }) {
+  useDisabledApps() // an app switched off drops its settings at once
   const profileApi = useProfile()
   const legacyCloudOn = isLegacyCloudSyncOn()
-  const [tab, setTab] = React.useState('profile')
+  // Opens on the tab that was asked for (openSettings), else where it was left, else Profile.
+  const [tab, setTab] = React.useState(() => {
+    const asked = takePendingSettingsTab()
+    return asked && visibleSettingsTabs().some(t => t.id === asked) ? asked : (readLastSettingsTab() || 'profile')
+  })
+  React.useEffect(() => { rememberSettingsTab(tab) }, [tab])
   useObserveOnSettingsChange(tab)
+  // "Open Settings on this tab" from elsewhere (a toast's Review button, the sidebar's sync badge).
+  React.useEffect(() => {
+    const onOpen = (e) => {
+      const asked = takePendingSettingsTab() || e.detail?.tab
+      if (asked && visibleSettingsTabs().some(t => t.id === asked)) setTab(asked)
+    }
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen)
+  }, [])
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
@@ -434,6 +463,7 @@ export function DesktopSettings({ tweaks, setTweak, nav, defaultNavOrder }) {
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 720 }}>
+          <SettingsCollapseControls />
 
           {tab === 'profile' && (
             <>

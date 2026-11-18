@@ -90,9 +90,12 @@ export const ALIASES = Object.freeze([
 ].map(Object.freeze))
 
 // Everything in tweaks that follows the person; every other field (known device ones and any
-// the future adds) stays on the device.
+// the future adds) stays on the device. `homeWidgets` joined later (it was device level in M1), so a first
+// sync where both sides already hold different widgets raises a conflict rather than silently taking the
+// other side's.
 export const TWEAK_ACCOUNT_FIELDS = Object.freeze([
   'theme', 'lightTheme', 'dimTheme', 'darkTheme', 'density', 'typeLabels', 'quickLinks', 'showMarkdown',
+  'homeWidgets',
 ])
 
 // Per-device preferences, matched against the key name without its `<ns>.` / `p.<pid>.` prefix.
@@ -408,6 +411,13 @@ export function createKeyRegistry({ namespace, getActiveProfileId } = {}) {
     return !m[1].includes('#') && M1_DEVICE_LEVEL.some(re => re.test(m[1]))
   }
 
+  // Ids of items a running app can take in without reloading: a profile's tweaks (sidebar, layout, widgets), the Work screens
+  // switched off, and which Settings sections are collapsed. The screens that show them read them again when told
+  // (see the shell and work-screens). Everything else (documents, tokens, the profiles list, ...) is read when the app
+  // starts, so a change to one of those still reloads.
+  const liveSafe = new RegExp(`^${namespace}:p\\.[^.#]+\\.(?:tweaks#|work\\.screens\\.off$|(?:${namespace}\\.)?settings\\.collapsed$)`)
+  const isLiveSafe = (id) => typeof id === 'string' && liveSafe.test(id)
+
   return {
     namespace,
     secPrefix,
@@ -422,5 +432,6 @@ export function createKeyRegistry({ namespace, getActiveProfileId } = {}) {
     isPlainTokenKey,
     profileOf,
     wasDeviceLevelInM1,
+    isLiveSafe,
   }
 }

@@ -90,6 +90,8 @@ export function mapBuild(b, proj = '') {
     // projectName is the raw ADO name needed for external URLs and API calls.
     project: slugify(proj),
     projectName: proj,
+    // The repository the build ran against (ADO: build.repository.name); the Builds view groups by it.
+    repo: b.repository?.name || '',
     pipeline: b.definition?.name || 'Pipeline',
     definitionId: b.definition?.id || 0,
     status,

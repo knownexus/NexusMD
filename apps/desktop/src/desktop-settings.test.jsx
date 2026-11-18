@@ -35,6 +35,9 @@ vi.mock('@nexusmd/ui', () => ({
   ),
   VsProfiles: () => <div data-testid="vs-profiles">VsProfiles</div>,
   useAccount: () => ({ sync: null }),
+  takePendingSettingsTab: () => null,
+  SettingsCollapseControls: () => <div data-testid="collapse-controls" />,
+  OPEN_SETTINGS_EVENT: 'nexusmd:open-settings',
   AccountCard: () => <div data-testid="account-card">AccountCard</div>,
   SyncStatusCard: () => <div data-testid="sync-status-card">SyncStatusCard</div>,
   RecoveredCopiesCard: () => <div data-testid="recovered-copies-card">RecoveredCopiesCard</div>,
@@ -208,7 +211,7 @@ describe('DesktopSettings tab navigation', () => {
   it('shows Data & sync tab content when clicked', () => {
     render(<DesktopSettings {...defaultProps} />)
     fireEvent.click(screen.getByRole('button', { name: 'Data & sync' }))
-    expect(screen.getByTestId('vs-card-data-sync')).toBeTruthy()
+    expect(screen.getByTestId('vs-card-local-data')).toBeTruthy()
     expect(screen.getByTestId('logs-card')).toBeTruthy()
   })
 
@@ -322,5 +325,32 @@ describe('Settings tabs follow the installed apps', () => {
   })
   it('shows both for the Planner alone', () => {
     expect(ids(['planner'])).toEqual(expect.arrayContaining(['planner', 'confidential']))
+  })
+})
+
+describe('DesktopSettings remembers the tab it was left on', () => {
+  it('opens on Profile the first time and writes the tab down as it changes', () => {
+    render(<DesktopSettings {...defaultProps} />)
+    expect(localStorage.getItem('nexusmd.settings.tab')).toBe('profile')
+    fireEvent.click(screen.getByRole('button', { name: 'Integrations' }))
+    expect(localStorage.getItem('nexusmd.settings.tab')).toBe('integrations')
+  })
+
+  it('opens on the tab it was left on', () => {
+    localStorage.setItem('nexusmd.settings.tab', 'integrations')
+    render(<DesktopSettings {...defaultProps} />)
+    expect(screen.getByTestId('integrations-view')).toBeTruthy()
+    expect(screen.queryByTestId('vs-card-profile')).toBeNull()
+  })
+
+  it('ignores a remembered tab that does not exist or is not shown here, and opens on Profile', () => {
+    localStorage.setItem('nexusmd.settings.tab', 'gone')
+    render(<DesktopSettings {...defaultProps} />)
+    expect(screen.getByTestId('vs-card-profile')).toBeTruthy()
+  })
+
+  it('shows Collapse all / Expand all', () => {
+    render(<DesktopSettings {...defaultProps} />)
+    expect(screen.getByTestId('collapse-controls')).toBeTruthy()
   })
 })

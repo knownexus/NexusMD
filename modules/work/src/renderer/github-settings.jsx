@@ -1,8 +1,9 @@
 import React from 'react'
-import { Icon, CardFrame, SettField } from '@nexusmd/ui'
+import { VsCard, SettField } from '@nexusmd/ui'
 import { core, makeGithubClient, discoverGithubRepos, MAX_GITHUB_REPOS, rendererLog, ignored } from '@nexusmd/core'
 import { getProfileKey } from '@nexusmd/shell-sdk'
 import { getGithubConfig, saveGithubConfig, createGithubHttpAdapter } from './github-client.js'
+import { githubStatus } from './connection-status.js'
 import { settInputStyle } from './form-style.js'
 import { DisconnectButton } from './disconnect-button.jsx'
 
@@ -93,7 +94,7 @@ export function GithubConnectionCard({ onRefreshData, makeClient = defaultClient
   const tag = { fontSize: 11, color: 'var(--text-subtle)', border: '1px solid var(--border)', borderRadius: 4, padding: '0 5px' }
 
   return (
-    <CardFrame title="GitHub Connection" icon={<Icon name="pr" size={16} />}>
+    <VsCard title="GitHub Connection" icon="pr" id="integrations-github" flush={false} status={githubStatus(getGithubConfig())}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
           <input type="checkbox" checked={issues} onChange={e => setIssues(e.target.checked)} />
@@ -172,6 +173,6 @@ export function GithubConnectionCard({ onRefreshData, makeClient = defaultClient
           )}
         </div>
       </div>
-    </CardFrame>
+    </VsCard>
   )
 }

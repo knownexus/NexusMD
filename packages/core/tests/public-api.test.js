@@ -31,7 +31,7 @@ const EXPECTED = [
   'buildDigest', 'buildEmptyPlannerData', 'buildProfile', 'buildTriageCsv', 'core',
   'createNoOpAdapters', 'createOfflineQueue', 'isNetworkError', 'TYPE_OPTIONS', 'isContainer', 'pathKey', 'describePath', 'rawOf', 'searchPaths', 'validateKey', 'editNode', 'addChild', 'removeNode', 'typeOf', 'getAtPath', 'setValueAtPath', 'replaceAtPath', 'addFieldAtPath', 'deleteAtPath', 'coerceVal', 'allContainerPaths', 'highlightSegments', 'jsonAutoName', 'MD_CHEAT_GROUPS', 'CHEAT', 'LEARN_ELEMENTS', 'markdownSourceOf', 'learnTarget', 'MAX_DIFF_LINES', 'diffLines', 'diffCounts', 'collapseDiff', 'orderTabs', 'moveTab', 'placeTabs', 'syncLabel', 'offlineText', 'createProfile', 'createTimer', 'decryptConfidentialFromServer',
   'deleteProfile', 'deriveActivity',
-  'derivePrSparkline', 'deriveProjects', 'deriveSprint', 'effectiveNeedsMe', 'effectiveTeamActivity',
+  'derivePrSparkline', 'deriveProjects', 'deriveSprint', 'effectiveNeedsMe', 'effectiveTeamActivity', 'isAuthoredByMe',
   'elapsedMs', 'encryptConfidentialForServer',
   'filterFiles', 'wordMatch', 'filterByWords', 'filterFilesByWords',
   'BRANCH_FILTERS', 'branchState', 'matchesFilter', 'filterCounts', 'branchMeta', 'commitsOff', 'repoPills', 'primaryAction', 'rewordProblem', 'squashPreviousProblem', 'squashSelectedProblem', 'editPlan', 'squashMessage',
@@ -52,7 +52,7 @@ const EXPECTED = [
   'MIN_ITERATIONS', 'randomSalt', 'deriveKeys', 'generateContainerKey', 'exportContainerKey',
   'importContainerKey', 'wrapContainerKey', 'unwrapContainerKey', 'encryptJson', 'decryptJson',
   'opaqueId', 'generateKeyPair', 'wrapPrivateKey', 'unwrapPrivateKey',
-  'createAccountClient', 'AccountError',
+  'createAccountClient', 'AccountError', 'serverNameOf',
   'createKeyRegistry', 'TWEAK_ACCOUNT_FIELDS', 'KEY_ALIASES', 'SYNC_SKIP', 'isSkippedKey',
   'createAccountSync', 'clearAccountLocalData', 'listUnpushed', 'purgeProfileLocal',
   // Field/column visibility catalogs + resolver (configurable cards & tables)
@@ -155,7 +155,10 @@ const EXPECTED = [
   'FIELD_DEFS', 'DEFAULT_STATUSES', 'DEFAULT_FIELDS', 'PRIORITY_LABELS', 'BUCKET_ORDER', 'BUCKET_LABELS',
   'toBucket', 'readLists', 'writeLists', 'newListId', 'safeListUrl',
   // Home widget configuration
-  'WIDGET_PAGES', 'pageLabel', 'WIDGET_CONFIG_TYPES', 'newWidgetsAfterSave',
+  'WIDGET_PAGES', 'pageLabel', 'WIDGET_CONFIG_TYPES', 'newWidgetsAfterSave', 'widgetPage', 'moveWidget', 'moveWidgetBy', 'widgetShown',
+  // Dashboard shortcuts to a file, folder or document
+  'LINK_TARGETS', 'DOC_TOOLS', 'LINK_UNAVAILABLE', 'normalizeRepoPath', 'normalizeRemote', 'remoteFromRemotes', 'repoKeys', 'githubRepoOf', 'cloneRepoIdentity', 'resolveRepo',
+  'readTarget', 'targetPlace', 'savedDocList', 'savedDocIds', 'childrenAt', 'linkPage', 'shortcutTitle', 'shortcutSub', 'shortcutIcon', 'linkId', 'makeLinkWidget', 'resolveLink',
 ].sort()
 
 describe('public API surface', () => {

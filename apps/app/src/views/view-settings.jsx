@@ -9,7 +9,7 @@ import { marked } from 'marked';
 import { WORK_SCREENS, useOffScreens, setOffScreens } from '../work-screens.js';
 import {
   PlToggle, VsRow, VsCard, VsFullRow, ThemeModeSettings, VsSeg, VsPasswordModal, VsProfiles, BackupRestoreCard, CloudSyncCard,
-  AccountCard, IntegrationsView,
+  AccountCard, IntegrationsView, SyncStatusCard, SyncConflictsCard, takePendingSettingsTab, OPEN_SETTINGS_EVENT, useSyncSummary,
 } from '@nexusmd/ui';
 import { appFileIO } from '../file-io.js';
 import { appCloudProviders, makeAppOAuthService } from '../cloud-auth.js';
@@ -20,7 +20,7 @@ import { getJiraConfig } from '../jira-client.js';
 import { getGithubConfig } from '../github-client.js';
 import { checkForUpdate, installUpdate } from '../app-update.js';
 import { appQueue } from '../offline-queue-app.js';
-import { syncLabel } from '@nexusmd/core';
+import { syncLabel, rendererLog, ignore } from '@nexusmd/core';
 import { connectionsSummary, connectedProviders, privacySummary, dataSummary } from '../settings-summary.js';
 // view-settings.jsx — Settings & profile page (planner-redesign port)
 // Works with the app's existing infrastructure:
@@ -130,6 +130,19 @@ function AppUpdateRow() {
   );
 }
 
+const log = rendererLog('core', 'settings');
+const LAST_PAGE_KEY = 'helm.settings.page';
+const SETTINGS_PAGES = ['profile', 'appearance', 'planner', 'profiles', 'privacy', 'data', 'integrations'];
+function readLastSettingsPage() {
+  try {
+    const p = sessionStorage.getItem(LAST_PAGE_KEY);
+    return p && SETTINGS_PAGES.includes(p) ? p : 'profile';
+  } catch (err) { ignore(log, 'the last Settings page could not be read, so Settings opens on Profile', err, 'debug'); return 'profile'; }
+}
+function rememberSettingsPage(page) {
+  try { sessionStorage.setItem(LAST_PAGE_KEY, page); } catch (err) { ignore(log, 'the Settings page could not be remembered', err, 'debug'); }
+}
+
 function SettingsView({ tweaks, setTweak, navGroups = [], onMoveNav, onPlaceNav, onResetNav, onWorkScreensChanged, onOpenConnection, onOpenJira, onOpenGithub, onOpenProjectAreas, onGoPlanner }) {
   // Phone: a grouped list of categories, each opening as its own page. Wider screens keep the rail.
   const [phone, setPhone] = useStateVS(() => window.matchMedia('(max-width:600px)').matches);
@@ -141,9 +154,20 @@ function SettingsView({ tweaks, setTweak, navGroups = [], onMoveNav, onPlaceNav,
     mq.addEventListener('change', h);
     return () => mq.removeEventListener('change', h);
   }, []);
-  const [subPage, setSubPage] = useStateVS(() => (window.matchMedia('(max-width:600px)').matches ? null : 'profile'));
+  // A tablet (the rail layout) opens on the page it was left on, for this session; a phone shows the list. Kept in
+  // session storage on purpose: a plain key here would be an account setting and sync to the other devices.
+  const [subPage, setSubPage] = useStateVS(() => takePendingSettingsTab()
+    || (window.matchMedia('(max-width:600px)').matches ? null : readLastSettingsPage()));
+  useEffectVS(() => { if (!phone && subPage) rememberSettingsPage(subPage); }, [phone, subPage]);
+  // openSettings(tab) from elsewhere while this page is already open.
+  useEffectVS(() => {
+    const onOpen = (e) => { const asked = takePendingSettingsTab() || e.detail?.tab; if (asked) setSubPage(asked); };
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  }, []);
   const page = subPage || (phone ? null : 'profile');
   const offScreens = useOffScreens();
+  const accountSync = useSyncSummary();
   const [pwOpen, setPwOpen] = useStateVS(false);
   const isManual = useProfile?.()?.activeProfile?.type === 'manual';
   const photoInputRef = useRefVS(null);
@@ -302,7 +326,7 @@ function SettingsView({ tweaks, setTweak, navGroups = [], onMoveNav, onPlaceNav,
     planner:      () => 'Landing page, navigation, entry style',
     profiles:     () => 'Switch or add profiles',
     privacy:      () => privacySummary({ hasPassword: !!confCfg.hash, autoRelock }),
-    data:         () => dataSummary({ pending: appQueue.count(), loadedLabel: syncLabel(HelmData?.loadedAt) }),
+    data:         () => dataSummary({ pending: appQueue.count(), loadedLabel: syncLabel(HelmData?.loadedAt), unsaved: accountSync.unsaved.total, conflicts: accountSync.conflicts }),
     integrations: () => connectionsSummary({ ado: getAdoConfig(), jira: getJiraConfig(), github: getGithubConfig() }),
   };
   const shownName = displayName || me.name || '—';
@@ -504,6 +528,8 @@ function SettingsView({ tweaks, setTweak, navGroups = [], onMoveNav, onPlaceNav,
               <VsProfiles profileApi={useProfile()} showOrgLabel={false} />
               <BackupRestoreCard fileIO={appFileIO} showExportSingle={true} cloudProviders={appCloudProviders}
                 accountSlot={<AccountCard account={account} />} />
+              <SyncStatusCard />
+              <SyncConflictsCard account={account} />
               <CloudSyncCard controller={appSync} providers={appCloudProviders} fileIO={appFileIO} />
             </>
           )}
@@ -530,7 +556,7 @@ function SettingsView({ tweaks, setTweak, navGroups = [], onMoveNav, onPlaceNav,
           )}
 
           {page === 'data' && (
-            <VsCard title="Data & sync" icon="inbox">
+            <VsCard title="Local data" icon="inbox">
               <AppUpdateRow />
               <VsRow title="Export this week" desc="Download as JSON or Word (.docx) from the planner header">
                 <button className="btn sm" onClick={() => {

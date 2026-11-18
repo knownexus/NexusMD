@@ -281,6 +281,7 @@ describe('tweaks', () => {
   it('has the exact account field list', () => {
     expect(TWEAK_ACCOUNT_FIELDS).toEqual([
       'theme', 'lightTheme', 'dimTheme', 'darkTheme', 'density', 'typeLabels', 'quickLinks', 'showMarkdown',
+      'homeWidgets',
     ])
   })
 
@@ -335,7 +336,7 @@ describe('tweaks', () => {
   it('splitTweaks puts account fields in account and everything else, unknown included, in device', () => {
     const reg = desktop()
     const t = {
-      theme: 'dark', density: 'compact', quickLinks: ['a'], showMarkdown: true,
+      theme: 'dark', density: 'compact', quickLinks: ['a'], showMarkdown: true, homeWidgets: [],
       lightTheme: 'l', dimTheme: 'd', darkTheme: 'k', typeLabels: { Bug: 'B' },
       sidebarWidth: 200, someFutureField: 1, accent: 'red',
     }
@@ -641,3 +642,34 @@ describe('registry v2 (nexusmd): profile scope, collections, field maps, machine
     expect(a.secretId('helm.p.1.android.pat')).toBe('sec:helm:helm.p.1.android.pat')
   })
 })
+
+describe('isLiveSafe: items a running app can take in without a reload', () => {
+  it('is true for a profile’s tweaks, the Work screens switched off, and the collapsed Settings sections', () => {
+    const r = desktop()
+    for (const id of ['nexusmd:p.P1.tweaks#navHidden', 'nexusmd:p.P1.tweaks#dashLayouts', 'nexusmd:p.P1.work.screens.off',
+      'nexusmd:p.P1.nexusmd.settings.collapsed', 'nexusmd:p.P1.settings.collapsed']) {
+      expect(r.isLiveSafe(id), id).toBe(true)
+    }
+  })
+
+  it('is false for everything that is read when the app starts', () => {
+    const r = desktop()
+    for (const id of ['profiles', 'p.P1.ado.org', 'nexusmd:p.P1.md_documents#d1', 'nexusmd:p.P1.tweaks', 'nexusmd:p.P1.planner.versions#v1',
+      'nexusmd:p.P1.work.screens.on', 'nexusmd:feature.x', 'device:prefs', '', null, undefined, 42]) {
+      expect(r.isLiveSafe(id), String(id)).toBe(false)
+    }
+  })
+
+  it('agrees with the ids the registry really gives those keys', () => {
+    const r = desktop()
+    expect(r.isLiveSafe(r.classify('nexusmd.p.P1.work.screens.off').id)).toBe(true)
+    expect(r.isLiveSafe(r.classify('nexusmd.p.P1.nexusmd.settings.collapsed').id)).toBe(true)
+    expect(r.isLiveSafe(r.classify('nexusmd.p.P1.md_documents').id)).toBe(false)
+  })
+
+  it('follows its own namespace: the phone’s ids on the phone, not the desktop’s', () => {
+    expect(android().isLiveSafe('helm:p.P1.tweaks#navHidden')).toBe(true)
+    expect(android().isLiveSafe('nexusmd:p.P1.tweaks#navHidden')).toBe(false)
+    expect(desktop().isLiveSafe('helm:p.P1.tweaks#navHidden')).toBe(false)
+  })
+});

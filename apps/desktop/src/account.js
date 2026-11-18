@@ -1,7 +1,7 @@
 // account.js — the desktop's NexusMD account wiring for <AccountGate> and <AccountCard>: where the
 // session and device id live, and how the sync engine reads this machine's settings.
-import { createAccountClient, createAccountSync, createKeyRegistry, clearAccountLocalData, listUnpushed, rendererLog, ignore } from '@nexusmd/core'
-import { buildProfileBundle } from '@nexusmd/ui'
+import { createAccountClient, createAccountSync, createKeyRegistry, clearAccountLocalData, listUnpushed, serverNameOf, rendererLog, ignore } from '@nexusmd/core'
+import { buildProfileBundle, openSettings } from '@nexusmd/ui'
 import { secureStorageAdapter, bundleSecureStorage } from './adapters/secureStorage.js'
 import { desktopFileIO } from './file-io.js'
 import { appPrefsAdapter } from './adapters/appPrefs.js'
@@ -74,6 +74,11 @@ function deviceNameDefault() {
 export const account = {
   client, sessionStore, deviceStore, createSync,
   platform: 'windows',
+  serverName: serverNameOf(API_BASE),
+  reviewConflicts: () => openSettings('data'),
+  // With these a pull that touched only other profiles, or only settings the open screens can read again, does not reload the app.
+  activeProfileId: () => localStorage.getItem('nexusmd.activeProfileId'),
+  isLiveSafe: keyRegistry.isLiveSafe,
   deviceNameDefault,
   optOutKey: OPT_OUT_KEY,
   boundUserKey: USER_KEY,

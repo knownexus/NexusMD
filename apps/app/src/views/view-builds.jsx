@@ -42,6 +42,15 @@ function usePhone() {
   return phone;
 }
 
+// "16 Nov 2026, 14:32" - the build's real finish time, not "3h ago".
+const fmtDateTime = (t) => {
+  if (!t) return '—';
+  const d = new Date(t);
+  return isNaN(d) ? '—' : d.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+const repoOf = (b) => b.repo || b.projectName || b.project || 'Unknown repo';
+const pipeKey = (b) => `${repoOf(b)}|${b.definitionId || b.pipeline || 'Pipeline'}`;
+
 // The build statuses the Status menu can pick between.
 const STATUS_OPTS = [['success', 'Passed', 'var(--success)'], ['failed', 'Failed', 'var(--danger)'], ['acknowledged', 'Acknowledged', 'var(--warning)'],
   ['partial', 'Partial', 'var(--warning)'], ['running', 'Running', 'var(--info)'], ['cancelled', 'Cancelled', 'var(--text-muted)']];
@@ -110,6 +119,9 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
   // A cell takes its place from the saved column order (the phone card lays out by its own rules).
   const colPos = (id) => 1 + colOrder.filter(x => !hiddenCols.includes(x)).indexOf(id);
   const W = ({ id, children }) => (phone ? children : <div style={{ order: colPos(id), minWidth: 0 }}>{children}</div>);
+  const [nicknames,        setNicknames]        = usePersisted('helm.builds.pipelineNicknames', {}, { sync: true });
+  const [editingKey,       setEditingKey]       = React.useState(null);
+  const [draft,            setDraft]            = React.useState('');
   const [hiddenPipelines,  setHiddenPipelines]  = usePersisted('helm.builds.hiddenPipelines', [], { sync: true });
   const [deployStatus,     setDeployStatus]     = React.useState(null);
   const [actioning,        setActioning]        = React.useState(new Set());
@@ -220,16 +232,34 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
     });
   }, [builds, statuses, hiddenSet, sortDir, acknowledgedSet]);
 
-  // ── Group by pipeline ───────────────────────────────────────
+  // ── Group by repo, then by pipeline ─────────────────────────
   const grouped = React.useMemo(() => {
     const map = new Map();
     filteredBuilds.forEach(b => {
-      const k = b.pipeline || 'Pipeline';
-      if (!map.has(k)) map.set(k, []);
-      map.get(k).push(b);
+      const k = pipeKey(b);
+      if (!map.has(k)) map.set(k, { key: k, repo: repoOf(b), name: b.pipeline || 'Pipeline', source: b.source === 'github' ? 'GitHub' : 'Azure DevOps', runs: [] });
+      map.get(k).runs.push(b);
     });
-    return Array.from(map.entries()).map(([name, runs]) => ({ name, runs }));
+    // Repos A-Z, pipelines A-Z inside each; runs keep the chosen date order.
+    return Array.from(map.values()).sort((x, y) => x.repo.localeCompare(y.repo) || x.name.localeCompare(y.name));
   }, [filteredBuilds]);
+  const repoGroups = React.useMemo(() => {
+    const m = new Map();
+    grouped.forEach(g => {
+      if (!m.has(g.repo)) m.set(g.repo, { runs: 0, failing: 0, pipelines: 0, source: g.source });
+      const r = m.get(g.repo);
+      r.runs += g.runs.length; r.pipelines += 1;
+      r.failing += g.runs.filter(b => b.status === 'failed' && !acknowledgedSet.has(b.id)).length;
+    });
+    return m;
+  }, [grouped, acknowledgedSet]);
+  const nickOf = (g) => nicknames[g.key] || '';
+  const startEdit = (g) => { setEditingKey(g.key); setDraft(nickOf(g)); };
+  const saveNick = (g) => {
+    const v = draft.trim();
+    setNicknames(n => { const o = { ...n }; if (v && v !== g.name) o[g.key] = v; else delete o[g.key]; return o; });
+    setEditingKey(null);
+  };
 
   // Full history for sparklines (unfiltered)
   const pipelineHistory = React.useMemo(() => {
@@ -239,6 +269,11 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
       if (!map.has(k)) map.set(k, []);
       map.get(k).push(dispStatus(b));
     });
+    return map;
+  }, [builds, acknowledgedSet]);
+  const keyHistory = React.useMemo(() => {
+    const map = new Map();
+    builds.forEach(b => { const k = pipeKey(b); if (!map.has(k)) map.set(k, []); map.get(k).push(dispStatus(b)); });
     return map;
   }, [builds, acknowledgedSet]);
 
@@ -282,7 +317,7 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
 
       {/* ── Builds table card ── */}
       <div style={{ overflowX:'auto' }}>
-      <div className="card m-bld-card" style={{ minWidth: phone ? Math.min(880, minTableW) : minTableW }}>
+      <div className="card m-bld-card" style={{ minWidth: phone ? 0 : minTableW }}>
         <div className="card-head" style={{ flexWrap:'wrap', gap:6 }}>
           {/* Status filter */}
           <DropMenu label={statuses.length === 0 ? 'All statuses' : statuses.length === 1 ? STATUS_OPTS.find(o => o[0] === statuses[0])[1] : `${statuses.length} statuses`}
@@ -360,11 +395,11 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
 
           <div style={{ width:1, height:16, background:'var(--border)', margin:'0 2px' }}/>
           {(() => {
-            const allCollapsed = grouped.length > 0 && grouped.every(g => collapsed[g.name]);
+            const allCollapsed = repoGroups.size > 0 && [...repoGroups.keys()].every(r => collapsed['r:' + r]);
             return (
               <button className="btn sm ghost" onClick={() => {
                 if (allCollapsed) { setCollapsed({}); return; }
-                const n = {}; grouped.forEach(g => { n[g.name] = true; }); setCollapsed(n);
+                const n = {}; repoGroups.forEach((_, r) => { n['r:' + r] = true; }); setCollapsed(n);
               }}><Icon name={allCollapsed ? 'chevron-down' : 'chevron-right'} size={12}/> {allCollapsed ? 'Expand all' : 'Collapse all'}</button>
             );
           })()}
@@ -404,37 +439,68 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
 
         {/* ── Pipeline groups ── */}
         <div className="card-body flush">
-          {grouped.map(g => {
-            const history = (pipelineHistory.get(g.name) || []).slice(0, 10);
+          {grouped.map((g, gi) => {
+            const history = (keyHistory.get(g.key) || []).slice(0, 10);
+            const showRepo = gi === 0 || grouped[gi - 1].repo !== g.repo;
+            const rg = repoGroups.get(g.repo);
+            const repoClosed = !!collapsed['r:' + g.repo];
+            const pipeClosed = !!collapsed['p:' + g.key];
+            const nick = nickOf(g);
+            const editing = editingKey === g.key;
+            const toggleRepo = () => setCollapsed(c => ({ ...c, ['r:' + g.repo]: !c['r:' + g.repo] }));
             return (
-              <React.Fragment key={g.name}>
-                {/* Group header */}
-                <div
-                  style={{
-                    padding:'7px 14px', background:'var(--surface-2)',
-                    borderBottom:'1px solid var(--border)',
-                    display:'flex', alignItems:'center', gap:8, cursor:'pointer',
-                  }}
-                  onClick={() => setCollapsed(c => ({ ...c, [g.name]: !c[g.name] }))}>
-                  <Icon name={collapsed[g.name] ? 'chevron-right' : 'chevron-down'} size={11}/>
-                  <span style={{ fontSize:12, fontWeight:600, color:'var(--text)' }}>{g.name}</span>
-                  <span className="muted mono" style={{ fontSize:10.5 }}>{g.runs.length} run{g.runs.length !== 1 ? 's' : ''}</span>
-                  {/* Sparkline */}
-                  <div style={{ display:'flex', gap:3, marginLeft:4 }} title="Last 10 build results (newest first)">
-                    {history.map((status, i) => (
-                      <span key={i} style={{
-                        width:8, height:8, borderRadius:2, flexShrink:0,
-                        background: sparkColor[status] || 'var(--text-subtle)', opacity:0.85,
-                      }}/>
-                    ))}
+              <React.Fragment key={g.key}>
+                {/* Repo header */}
+                {showRepo && (
+                  <div role="button" tabIndex={0} className="bld-repo" onClick={toggleRepo}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleRepo(); } }}
+                    style={{ padding:'10px 14px', background:'var(--surface-2)', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)',
+                      display:'flex', alignItems:'center', gap:8, cursor:'pointer', minWidth:0 }}>
+                    <Icon name={repoClosed ? 'chevron-right' : 'chevron-down'} size={12}/>
+                    <span style={{ fontSize:13.5, fontWeight:700, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{g.repo}</span>
+                    <span className="muted" style={{ fontSize:11.5, whiteSpace:'nowrap' }}>{rg.source} · {rg.pipelines} pipeline{rg.pipelines !== 1 ? 's' : ''}</span>
+                    {rg.failing > 0 && <span className="pill" style={{ marginLeft:'auto', fontSize:10.5, color:'var(--danger)', borderColor:'var(--danger)', whiteSpace:'nowrap' }}>{rg.failing} failing</span>}
                   </div>
+                )}
+
+                {/* Pipeline header */}
+                {!repoClosed && (
+                <div className="bld-pipe"
+                  style={{ padding:'7px 14px 7px 30px', borderBottom:'1px solid var(--border)', boxShadow:'inset 3px 0 0 var(--border)',
+                    display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', cursor: editing ? 'default' : 'pointer' }}
+                  onClick={() => { if (!editing) setCollapsed(c => ({ ...c, ['p:' + g.key]: !c['p:' + g.key] })); }}>
+                  <Icon name={pipeClosed ? 'chevron-right' : 'chevron-down'} size={11}/>
+                  {editing ? (
+                    <form style={{ display:'flex', gap:6, flex:'1 1 200px', minWidth:0 }} onClick={e => e.stopPropagation()}
+                      onSubmit={e => { e.preventDefault(); saveNick(g); }}>
+                      <input autoFocus value={draft} maxLength={40} placeholder={g.name} aria-label={`Nickname for ${g.name}`}
+                        onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setEditingKey(null); }}
+                        style={{ flex:1, minWidth:0, fontSize:12.5, padding:'4px 8px' }}/>
+                      <button type="submit" className="btn sm"><Icon name="check" size={12}/> Save</button>
+                      <button type="button" className="btn sm ghost" onClick={() => setEditingKey(null)}>Cancel</button>
+                    </form>
+                  ) : (
+                    <React.Fragment>
+                      <span style={{ fontSize:12.5, fontWeight:600, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{nick || g.name}</span>
+                      {nick && <span className="muted" style={{ fontSize:11, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title="Pipeline name in the source">{g.name}</span>}
+                      <button type="button" className="btn sm ghost" title={nick ? 'Edit nickname' : 'Add a nickname'} aria-label={`${nick ? 'Edit' : 'Add'} nickname for ${g.name}`}
+                        onClick={e => { e.stopPropagation(); startEdit(g); }} style={{ padding:'0 6px' }}><Icon name="edit" size={11}/></button>
+                      <span className="muted mono" style={{ fontSize:10.5, marginLeft:'auto' }}>{g.runs.length} run{g.runs.length !== 1 ? 's' : ''}</span>
+                      <div style={{ display:'flex', gap:3 }} title="Last 10 build results (newest first)">
+                        {history.map((status, i) => (
+                          <span key={i} style={{ width:8, height:8, borderRadius:2, flexShrink:0, background: sparkColor[status] || 'var(--text-subtle)', opacity:0.85 }}/>
+                        ))}
+                      </div>
+                    </React.Fragment>
+                  )}
                 </div>
+                )}
 
                 {/* Build rows */}
-                {!collapsed[g.name] && g.runs.map(b => {
+                {!repoClosed && !pipeClosed && g.runs.map(b => {
                   const isNew = newItemIds.has(b.id);
                   return (
-                  <div key={`${g.name}-${b.id}`}
+                  <div key={`${g.key}-${b.id}`}
                     className="build-row" role="button" tabIndex={0}
                     onClick={() => setDetailBuild(b)}
                     onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget) setDetailBuild(b); }}
@@ -468,7 +534,7 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
                             title={b.failureReason}>{b.failureReason}</span>
                         : <span style={{ display:'flex', alignItems:'center', gap:5, overflow:'hidden' }}>
                             <Avatar who={b.actor} size="xs"/>
-                            <span style={{ fontSize:12.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{b.actor}</span>
+                            <span style={{ fontSize:12.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{phone ? `Triggered by ${b.actor}` : b.actor}</span>
                           </span>
                       }
                     </div>
@@ -506,13 +572,13 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
 
                     {/* Duration */}
 {col('duration') && (<W id="duration">
-                    <div className="build-meta" style={phone ? { order:4 } : undefined}>{b.duration}</div>
+                    <div className="build-meta" style={phone ? { order:4 } : undefined} title="Duration">{phone ? `Took ${b.duration}` : b.duration}</div>
 </W>)}
 
                     {/* Date */}
 {col('date') && (<W id="date">
-                    <div className="build-meta" style={phone ? { order:2, marginLeft:'auto' } : undefined} title={b.finishTime ? new Date(b.finishTime).toLocaleString() : ''}>
-                      {b.when}
+                    <div className="build-meta" style={phone ? { order:2, marginLeft:'auto' } : undefined} title={b.when}>
+                      {fmtDateTime(b.finishTime)}
                     </div>
 </W>)}
 
@@ -584,8 +650,8 @@ function BuildsView({ builds: allBuilds, acknowledgedBuilds, setAcknowledgedBuil
           const b = detailBuild;
           const webUrl = b.source === 'github' ? b.url : (HelmData.ORG && b.project ? `https://dev.azure.com/${encodeURIComponent(HelmData.ORG)}/${encodeURIComponent(b.project)}/_build/results?buildId=${b.id}` : '');
           const facts = [
-            ['Status', dispStatus(b)], ['Branch', b.branch], ['Commit', b.commit], ['Triggered by', b.actor],
-            ['Reason', reasonLabel[b.reason] || b.reason], ['Duration', b.duration], ['Finished', b.finishTime ? new Date(b.finishTime).toLocaleString() : b.when],
+            ['Repo', repoOf(b)], ['Pipeline', nicknames[pipeKey(b)] ? `${nicknames[pipeKey(b)]} (${b.pipeline})` : b.pipeline], ['Status', dispStatus(b)], ['Branch', b.branch], ['Commit', b.commit], ['Triggered by', b.actor],
+            ['Reason', reasonLabel[b.reason] || b.reason], ['Duration', b.duration], ['Finished', fmtDateTime(b.finishTime)],
           ].filter(([, v]) => v);
           return (
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>

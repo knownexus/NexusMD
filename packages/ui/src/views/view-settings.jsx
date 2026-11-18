@@ -61,10 +61,16 @@ function writeCollapsed(id, collapsed, key = COLLAPSED_KEY) {
   } catch (err) { ignore(log, 'a section state could not be remembered (storage unavailable)', err, 'debug') }
 }
 
+// "Collapse all" / "Expand all": every Settings section that is on screen follows (see SettingsCollapseControls).
+export const SETTINGS_COLLAPSE_EVENT = 'nexusmd:settings-collapse';
+const STATUS_PILL = { ok: 'success', warn: 'warning', bad: 'danger' };
+
 // A Settings section. Its title bar collapses and expands it, and that is remembered by `id`
 // (the title by default). A collapsed section stays mounted, so a half-typed field survives it.
 // `actions` sit at the right of the title bar; `flush` drops the body padding for rows (VsRow).
-function VsCard({ title, icon, children, id, actions, flush = true }) {
+// `status` ({ text, tone: 'ok' | 'warn' | 'bad' | 'muted' }) is a pill beside the title, so a folded section still says
+// where it stands (Connected, Not set up, ...).
+function VsCard({ title, icon, children, id, actions, flush = true, status }) {
   const key = id || (typeof title === 'string' ? title : '');
   const { getProfileKey } = useNexusData();
   const storeKey = getProfileKey(COLLAPSED_KEY);
@@ -75,6 +81,16 @@ function VsCard({ title, icon, children, id, actions, flush = true }) {
     setCollapsed(next);
     if (key) writeCollapsed(key, next, storeKey);
   };
+  React.useEffect(() => {
+    if (!key) return undefined;
+    const onAll = (e) => {
+      const next = !!(e.detail && e.detail.collapsed);
+      setCollapsed(next);
+      writeCollapsed(key, next, storeKey);
+    };
+    window.addEventListener(SETTINGS_COLLAPSE_EVENT, onAll);
+    return () => window.removeEventListener(SETTINGS_COLLAPSE_EVENT, onAll);
+  }, [key, storeKey]);
   return (
     <div className={`card set-card${collapsed ? ' collapsed' : ''}`}>
       <div className="card-head">
@@ -82,9 +98,23 @@ function VsCard({ title, icon, children, id, actions, flush = true }) {
           <span className="chev" style={{ display: 'flex' }}><Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={14}/></span>
           <h3><span style={{ color: 'var(--text-subtle)', display: 'flex' }}><Icon name={icon} size={14}/></span>&nbsp;{title}</h3>
         </button>
+        {status && status.text && (
+          <span className={`pill ${STATUS_PILL[status.tone] || ''}`.trim()} data-testid="card-status" style={{ marginLeft: 'auto', flexShrink: 0 }}>{status.text}</span>
+        )}
         {actions && <div className="actions">{actions}</div>}
       </div>
       <div id={bodyId} className={`card-body${flush ? ' flush' : ''}`} hidden={collapsed}>{children}</div>
+    </div>
+  );
+}
+
+// Two small buttons that fold or unfold every section on the screen at once.
+function SettingsCollapseControls() {
+  const send = (collapsed) => window.dispatchEvent(new CustomEvent(SETTINGS_COLLAPSE_EVENT, { detail: { collapsed } }));
+  return (
+    <div className="settings-collapse-controls" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+      <button type="button" className="btn sm ghost" onClick={() => send(true)}>Collapse all</button>
+      <button type="button" className="btn sm ghost" onClick={() => send(false)}>Expand all</button>
     </div>
   );
 }
@@ -605,7 +635,7 @@ function restoreMessage({ restored, failed }) {
   return { text: parts.join(' '), type: failed.length ? 'error' : 'success' };
 }
 
-// Cloud Sync card — continuous sync + encrypted local export/import. Driven by a
+// Google Drive / OneDrive sync card — continuous sync + encrypted local export/import. Driven by a
 // platform sync controller (createSyncController), the platform's cloud providers,
 // and its file I/O. Shared across web/desktop/app.
 function CloudSyncCard({ controller, providers, fileIO }) {
@@ -712,7 +742,7 @@ function CloudSyncCard({ controller, providers, fileIO }) {
     : 'Push and pull encrypted changes with your cloud';
 
   return (
-    <VsCard title="Cloud Sync" icon="inbox">
+    <VsCard title="Google Drive / OneDrive sync" icon="inbox">
       <VsFullRow title="Cloud provider" desc="Where encrypted sync files are stored">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {providers.map(p => (
@@ -748,8 +778,8 @@ function CloudSyncCard({ controller, providers, fileIO }) {
           </div>
         )}
       </VsRow>
-      <VsRow title="Sync now" desc={lastDesc}>
-        <button className="btn sm" onClick={handleSyncNow} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync now'}</button>
+      <VsRow title="Google Drive / OneDrive" desc={lastDesc}>
+        <button className="btn sm" onClick={handleSyncNow} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync with Drive / OneDrive'}</button>
       </VsRow>
       {unreadable.length > 0 && (
         <div className="set-row" role="alert">
@@ -1173,7 +1203,7 @@ function CardsAndTablesSettings() {
 // ── Shared exports ────────────────────────────────────────────────
 export {
   PROFILE_COLORS, PROFILE_TYPES,
-  PlToggle, VsRow, VsCard, VsFullRow, ThemeChipPicker, ThemeModeSettings, VsSeg,
+  PlToggle, VsRow, VsCard, VsFullRow, ThemeChipPicker, ThemeModeSettings, VsSeg, SettingsCollapseControls,
   VsPasswordModal, VsProfileEditor, VsProfiles,
   BundlePasswordModal, BackupRestoreCard, CloudPickerModal, CloudSyncCard,
   OAuthServiceCard, IntegrationsView,

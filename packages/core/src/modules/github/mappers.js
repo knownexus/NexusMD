@@ -128,6 +128,7 @@ export function mapGithubRun(run, repo) {
     id: run.id,
     project: slugify(repo),
     projectName: repo,
+    repo,
     pipeline: run.name || run.display_title || 'Workflow',
     definitionId: run.workflow_id || 0,
     status,

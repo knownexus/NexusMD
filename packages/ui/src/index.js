@@ -45,8 +45,11 @@ export { ProfileProvider, useProfile, localUpsertProfiles, buildProfileBundle } 
 export { ProfileGate } from './profile-gate.jsx'
 
 // Optional NexusMD account (settings sync): sign-in gate, settings card, and the useAccount() hook.
-export { AccountGate, useAccount, accountErrorMessage, syncItemLabel } from './account-gate.jsx'
+export { AccountGate, AccountContext, useAccount, accountErrorMessage, syncItemLabel } from './account-gate.jsx'
 export { SyncStatusCard } from './sync-status-card.jsx'
+export { useSyncSummary, refreshSyncSummary } from './sync-summary.js'
+export { openSettings, takePendingSettingsTab, OPEN_SETTINGS_EVENT } from './open-settings.js'
+export { SETTINGS_COLLAPSE_EVENT } from './views/view-settings.jsx'
 export { RecoveredCopiesCard } from './recovered-copies-card.jsx'
 export { SyncConflictsCard, ConflictDialog } from './sync-conflicts.jsx'
 export { AccountCard } from './account-card.jsx'
@@ -78,7 +81,7 @@ export {
 // SettingsView page + integration cards; these are the shared building blocks.
 export {
   PROFILE_COLORS, PROFILE_TYPES,
-  PlToggle, VsRow, VsCard, VsFullRow, ThemeChipPicker, ThemeModeSettings, VsSeg,
+  PlToggle, VsRow, VsCard, VsFullRow, ThemeChipPicker, ThemeModeSettings, VsSeg, SettingsCollapseControls,
   VsPasswordModal, VsProfileEditor, VsProfiles,
   BundlePasswordModal, BackupRestoreCard, CloudPickerModal, CloudSyncCard,
   OAuthServiceCard, IntegrationsView, BoardColumnsCard, FieldVisibilityCard,
@@ -126,6 +129,7 @@ export { DashboardView } from './views/view-dashboard.jsx'
 // its data and storage seams (see the headers of these files).
 export { ListsView } from './views/view-lists.jsx'
 export { WidgetHost, WidgetSheet, WidgetBody, WIDGET_TYPES } from './home-widgets.jsx'
+export { pinToHome, listenForPins, PIN_EVENT } from './pin-shortcut.js'
 export {
   Card as WidgetCard, TimeWidget, NotesWidget, LatestBuild, LatestTest, storageTimerStore,
 } from './dashboard-interactive-widgets.jsx'

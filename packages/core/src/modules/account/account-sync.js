@@ -58,7 +58,14 @@ export function createAccountSync({
       try { cb(arg) } catch (err) { ignore(log, 'a sync listener threw; it must not break sync', err, 'warn') }
     }
   }
-  const emitApplied = (applied) => { if (applied) emit(appliedListeners, { applied }) }
+  // cb({ applied, items, global }) after a pull changed local data. `items` are the ids that were written, each with the profile
+  // it belongs to ({ id, profileId }; null for one that belongs to none, such as the profiles list or this device's prefs), or
+  // null when it is not known which; `global` is true when any of them belongs to no profile, or when items is unknown.
+  const emitApplied = (applied, ids = null) => {
+    if (!applied) return
+    const items = Array.isArray(ids) ? ids.map((id) => ({ id, profileId: profileOfId(id) })) : null
+    emit(appliedListeners, { applied, items, global: !items || items.some((i) => !i.profileId) })
+  }
   const conflictListeners = new Set()
   const conflictCount = () => Object.keys(load().conflicts).length
 
@@ -335,7 +342,7 @@ export function createAccountSync({
       }
       delete after.conflicts[id]
       save(after)
-      emitApplied(changed ? 1 : 0)
+      emitApplied(changed ? 1 : 0, [id])
       return {}
     }
     let value
@@ -362,7 +369,7 @@ export function createAccountSync({
     }
     delete after.conflicts[id]
     save(after)
-    emitApplied(changed ? 1 : 0)
+    emitApplied(changed ? 1 : 0, [id])
     return {}
   }
 
@@ -374,7 +381,7 @@ export function createAccountSync({
     if (remoteRaw == null) return {} // deleted elsewhere: nothing to copy
     const copy = { ...JSON.parse(remoteRaw), id: `${target.recordId}-c${now()}` }
     for (const f of ['name', 'title']) if (typeof copy[f] === 'string') copy[f] = copyName(copy[f])
-    if (await writeLocal(ctx, { ...target, recordId: copy.id }, stableJson(copy), false)) emitApplied(1)
+    if (await writeLocal(ctx, { ...target, recordId: copy.id }, stableJson(copy), false)) emitApplied(1, [id])
     return {} // the copy is a new local record: the next push sends it
   }
 
@@ -402,7 +409,9 @@ export function createAccountSync({
     return true
   }
 
-  async function pullItems() {
+  // `profileId` limits a pull to one profile (and the profiles list, so one made elsewhere shows up): every other
+  // change is left for the next full sync, held like an entry that is looked at again, so the cursor cannot pass it.
+  async function pullItems(profileId = null, collect = []) {
     const meta = load()
     const feed = await fetchFeed(client, meta.cursor, pageSize)
     const latest = new Map()
@@ -428,7 +437,8 @@ export function createAccountSync({
       settled = true
       state.purged = purgedProfiles()
       let reread = await applyPurges(meta, state)
-      if (profilesApplied && ensureActiveProfile()) { applied++; reread = true }
+      if (reread) collect.push('profiles') // a purge removed a profile's data here
+      if (profilesApplied && ensureActiveProfile()) { applied++; reread = true; collect.push('profiles') }
       if (reread) state = await localState(meta) // key names under the new active profile / purged data gone
     }
     for (const { c, remote } of decoded) {
@@ -437,10 +447,15 @@ export function createAccountSync({
       if (!target || target.level !== 'account') continue
       const m = meta.entries[remote.id]
       if (m && m.revision === remote.revision) continue // already seen (often our own write)
+      if (profileId && remote.id !== 'profiles' && profileOfId(remote.id) !== profileId) {
+        hold = Math.min(hold, num(c.cursor) - 1)
+        continue
+      }
       const res = await reconcile(meta, state, target, remote)
       if (res === 'held') hold = Math.min(hold, num(c.cursor) - 1) // seen again next pull
       else if (res === 'applied') {
         applied++
+        collect.push(remote.id)
         if (remote.id === 'profiles') profilesApplied = true
       }
     }
@@ -469,7 +484,7 @@ export function createAccountSync({
     }
   }
 
-  async function pullDevice() {
+  async function pullDevice(collect = []) {
     if (!deviceId) return 0
     const r = await fetchDevicePrefs()
     if (r == null) return 0
@@ -487,20 +502,20 @@ export function createAccountSync({
     const entries = isPlainObject(blob.entries) ? blob.entries : {}
     let applied = 0
     let held = false
-    const count = (res) => { if (res === 'held') held = true; else if (res === 'applied') applied++ }
+    const count = (res, id) => { if (res === 'held') held = true; else if (res === 'applied') { applied++; collect.push(id) } }
     const seen = new Set()
     for (const [id, e] of Object.entries(entries)) {
       const target = resolveTarget(registry, id)
       if (!isPlainObject(e) || !target || target.level !== 'device') continue
       seen.add(id)
-      count(await reconcile(meta, state, target, { id, value: e.value, updatedAt: num(e.updatedAt), deleted: false }))
+      count(await reconcile(meta, state, target, { id, value: e.value, updatedAt: num(e.updatedAt), deleted: false }), id)
     }
     // A tracked device entry missing from a newer blob was removed by another install of this device.
     for (const [id, m] of Object.entries(meta.entries)) {
       if (m.level !== 'device' || m.deleted || seen.has(id) || state.isUnavailable(id)) continue
       const target = resolveTarget(registry, id)
       if (!target || target.kind === 'tweaks') continue
-      count(await reconcile(meta, state, target, { id, value: null, updatedAt: 0, deleted: true }))
+      count(await reconcile(meta, state, target, { id, value: null, updatedAt: 0, deleted: true }), id)
     }
     if (devicePrefs && isPlainObject(blob.prefs)) {
       const cur = await stampPrefs(meta)
@@ -511,6 +526,7 @@ export function createAccountSync({
         if (cur.hash !== remoteHash) {
           await devicePrefs.apply(blob.prefs)
           applied++
+          collect.push('device:prefs')
         }
         delete dp.prefsChangedAt
         delete dp.prefsChangedHash
@@ -523,20 +539,23 @@ export function createAccountSync({
     return applied
   }
 
-  async function pullInner() {
+  async function pullInner(profileId = null) {
     let applied = 0
+    const ids = []
     try {
-      applied += await pullItems()
-      applied += await pullDevice()
+      applied += await pullItems(profileId, ids)
+      if (!profileId) applied += await pullDevice(ids) // a device's prefs are not a profile's
       return { applied }
     } finally {
-      emitApplied(applied)
+      emitApplied(applied, ids)
     }
   }
 
   // ---- push --------------------------------------------------------------------------
 
-  async function pushItemsRound(force) {
+  // `profileId` limits a push to one profile (and the profiles list, so a profile that only exists here becomes known).
+  async function pushItemsRound(force, profileId = null) {
+    const inScope = (id) => !profileId || id === 'profiles' || profileOfId(id) === profileId
     const meta = load()
     const { snap, isUnavailable, purged } = await localState(meta)
     const t = now()
@@ -546,6 +565,7 @@ export function createAccountSync({
     for (const id of Object.keys(meta.rejected)) if (!snap.has(id)) delete meta.rejected[id]
     for (const [id, e] of snap) {
       if (e.level !== 'account' || meta.conflicts[id]) continue // a conflict waits for the owner
+      if (!inScope(id)) continue
       if (purged.has(profileOfId(id))) continue // a purged profile is never resurrected
       const m = meta.entries[id]
       const changed = !m || localChanged(m, e)
@@ -557,6 +577,7 @@ export function createAccountSync({
     }
     for (const [id, m] of Object.entries(meta.entries)) {
       if (m.level !== 'account' || m.deleted || !(m.revision > 0) || snap.has(id) || isUnavailable(id) || meta.conflicts[id]) continue
+      if (!inScope(id)) continue
       if (meta.pendingPurges[profileOfId(id)]) continue // its data is kept until the owner confirms
       const target = resolveTarget(registry, id)
       if (!target || target.kind === 'tweaks') continue // tweaks halves are never deleted
@@ -652,19 +673,21 @@ export function createAccountSync({
     return { pushed: true }
   }
 
-  async function pushInner(force) {
-    let r = await pushItemsRound(force)
+  async function pushInner(force, profileId = null) {
+    let r = await pushItemsRound(force, profileId)
     let pushed = r.pushed
     if (r.conflicts.length) {
       // Someone else wrote first: take their changes in, re-merge, and try once more.
-      await pullInner()
-      r = await pushItemsRound(false)
+      await pullInner(profileId)
+      r = await pushItemsRound(false, profileId)
       pushed += r.pushed
     }
+    if (profileId) return { pushed, conflicts: r.conflicts.length, tooLarge: r.tooLarge, quota: r.quota, devicePrefs: false }
     let conflicts = r.conflicts.length
     let d = await pushDeviceRound(force)
     if (d.conflict) {
-      emitApplied(await pullDevice())
+      const ids = []
+      emitApplied(await pullDevice(ids), ids)
       d = await pushDeviceRound(false)
       if (d.conflict) conflicts++
     }
@@ -735,6 +758,15 @@ export function createAccountSync({
     return { applied: pulled.applied, ...pushed }
   }))))
 
+  // The profile id asked for in { profileId }, or null for every profile.
+  const profileOf = (opts) => (opts && typeof opts.profileId === 'string' && opts.profileId ? opts.profileId : null)
+  // Remembers when one profile was last saved or loaded on its own (meta.profileSaved / meta.profileLoaded).
+  function stamp(field, pid) {
+    const meta = load()
+    meta[field] = { ...(meta[field] || {}), [pid]: now() }
+    save(meta)
+  }
+
   /** A sync, or (when one is already running) at least an observation of local edits. */
   const kick = () => syncNow().then((r) => (r && r.skipped ? observe() : r))
 
@@ -748,8 +780,30 @@ export function createAccountSync({
     },
     /** Local only: stamp the time of local edits, no network, nothing applied. */
     observe,
-    pull: () => guarded(reportingRemoved(pullInner)),
-    push: () => guarded(reportingRemoved(() => pushInner(false))),
+    /**
+     * Download what the server has newer. With { profileId } only that profile (and the profiles list) is touched, its
+     * time is kept as lastLoadedAt, and nothing else is: a clash with a local edit becomes a conflict, as in any sync.
+     */
+    pull: (opts) => {
+      const pid = profileOf(opts)
+      return guarded(reportingRemoved(async () => {
+        const r = await pullInner(pid)
+        if (pid) stamp('profileLoaded', pid)
+        return r
+      }))
+    },
+    /**
+     * Upload what changed here. With { profileId } only that profile (and the profiles list) is sent, and its time is kept as
+     * lastSavedAt unless something clashed.
+     */
+    push: (opts) => {
+      const pid = profileOf(opts)
+      return guarded(reportingRemoved(async () => {
+        const r = await pushInner(false, pid)
+        if (pid && !r.conflicts) stamp('profileSaved', pid)
+        return r
+      }))
+    },
     seed: () => guarded(reportingRemoved(() => pushInner(true))),
     syncNow,
 
@@ -849,6 +903,24 @@ export function createAccountSync({
     /** Local values not on the server yet, plus open conflicts: [{ id, profileId }] (secrets not judged). */
     unpushed: () => listUnpushed({ registry, storage, metaKey }),
 
+    /**
+     * How many changes on this device are not saved to the server, per profile: { profiles: { [pid]: n }, unattributed, total }.
+     * Open conflicts are not counted (they are a decision, not something Save would send), and neither is a purged profile.
+     * `unattributed` is what belongs to no profile (the profiles list, ...). Secrets are not judged, as in unpushed().
+     */
+    async unsaved() {
+      const meta = load()
+      const purged = new Set(profilesList().filter((p) => p.purgedAt).map((p) => p.id))
+      const profiles = {}
+      let unattributed = 0
+      for (const { id, profileId } of await listUnpushed({ registry, storage, metaKey })) {
+        if (meta.conflicts[id]) continue
+        if (profileId == null) unattributed++
+        else if (!purged.has(profileId)) profiles[profileId] = (profiles[profileId] || 0) + 1
+      }
+      return { profiles, unattributed, total: unattributed + Object.values(profiles).reduce((a, b) => a + b, 0) }
+    },
+
     /** Purges brought by a pull that wait for the owner: [{ pid, name, unpushed: ids }]. */
     pendingPurges() {
       return Object.values(load().pendingPurges).map((p) => ({ pid: p.pid, name: p.name, unpushed: [...(p.unpushed || [])] }))
@@ -876,7 +948,7 @@ export function createAccountSync({
     },
 
     /**
-     * { lastSyncAt, profiles: { [pid]: { lastSyncAt, conflicts, tooLarge, quota, error } } } for
+     * { lastSyncAt, profiles: { [pid]: { lastSyncAt, lastSavedAt, lastLoadedAt, conflicts, tooLarge, quota, error } } } for
      * every profile in the list but purged ones. tooLarge / quota list the profile's ids the server
      * refused; error is the last failed syncNow's message (shared: one round covers all profiles).
      */
@@ -885,7 +957,12 @@ export function createAccountSync({
       const profiles = {}
       for (const p of profilesList()) {
         if (p.purgedAt) continue
-        profiles[p.id] = { lastSyncAt: (meta.profileSync && meta.profileSync[p.id]) || null, conflicts: 0, tooLarge: [], quota: [], error: meta.lastError || null }
+        profiles[p.id] = {
+          lastSyncAt: (meta.profileSync && meta.profileSync[p.id]) || null,
+          lastSavedAt: (meta.profileSaved && meta.profileSaved[p.id]) || null,
+          lastLoadedAt: (meta.profileLoaded && meta.profileLoaded[p.id]) || null,
+          conflicts: 0, tooLarge: [], quota: [], error: meta.lastError || null,
+        }
       }
       for (const [id, c] of Object.entries(meta.conflicts)) {
         const row = profiles[c.profileId ?? profileOfId(id)]
