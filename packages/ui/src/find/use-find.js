@@ -24,6 +24,8 @@ export function useFind() {
   const next = React.useCallback(() => setIndex(i => stepIndex(i, countRef.current, 1)), [])
   const prev = React.useCallback(() => setIndex(i => stepIndex(i, countRef.current, -1)), [])
   const close = React.useCallback(() => setOpenState(false), [])
+  // Makes the match at `i` the current one (a search result opens the file on its own match); report() clamps it.
+  const goTo = React.useCallback(i => setIndex(Math.max(0, i)), [])
 
-  return { open, setOpen, focusTick, close, query, setQuery, matchCase, setMatchCase, index, count, report, next, prev }
+  return { open, setOpen, focusTick, close, query, setQuery, matchCase, setMatchCase, index, count, report, next, prev, goTo }
 }

@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import JSZip from 'jszip'
-import { unpackBranchZip, ZIP_LIMIT } from './repo-zip.js'
+import { unpackBranchZip, ZIP_LIMIT, UNPACK_LIMIT } from './repo-zip.js'
 
 const make = async files => {
   const zip = new JSZip()
   for (const [name, content] of Object.entries(files)) zip.file(name, content)
-  return zip.generateAsync({ type: 'uint8array' })
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' })
 }
 
 describe('unpackBranchZip', () => {
@@ -40,5 +40,19 @@ describe('unpackBranchZip', () => {
   })
   it('refuses bytes over the limit too', async () => {
     await expect(unpackBranchZip({ length: ZIP_LIMIT + 1 }, {})).rejects.toThrow(/too large to search on the phone/)
+  })
+  it('stops and says so when the files add up to more than it will unpack, instead of inflating everything', async () => {
+    expect(UNPACK_LIMIT).toBe(150 * 1024 * 1024)
+    const bytes = await make({ 'r/a.txt': 'a'.repeat(600), 'r/b.txt': 'b'.repeat(600), 'r/c.txt': 'c'.repeat(600) })
+    await expect(unpackBranchZip(bytes, { stripTop: true, maxTotal: 1000 })).rejects.toThrow(/too large to search on the phone/)
+  })
+  it('reads a huge, well-compressed file only as far as the size limit (a decompression bomb)', async () => {
+    // 20 MB of one repeated letter compresses to a few KB; it must be skipped, and not slow the rest down.
+    const bytes = await make({ 'r/bomb.txt': 'z'.repeat(20 * 1024 * 1024), 'r/ok.txt': 'fine' })
+    expect(bytes.length).toBeLessThan(100 * 1024)
+    const started = Date.now()
+    const files = await unpackBranchZip(bytes, { stripTop: true })
+    expect(files.map(f => f.path)).toEqual(['ok.txt'])
+    expect(Date.now() - started).toBeLessThan(5000)
   })
 })

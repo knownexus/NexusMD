@@ -36,6 +36,14 @@ describe('useFind', () => {
     act(() => result.current.next())
     expect(result.current.index).toBe(0)
   })
+  it('goTo moves to a given match, and report clamps it', () => {
+    const { result } = renderHook(() => useFind())
+    act(() => result.current.report(5))
+    act(() => result.current.goTo(3))
+    expect(result.current.index).toBe(3)
+    act(() => result.current.report(2))
+    expect(result.current.index).toBe(1)
+  })
   it('keeps the query when closed and reopened', () => {
     const { result } = renderHook(() => useFind())
     act(() => { result.current.setOpen(true); result.current.setQuery('abc') })
