@@ -189,3 +189,6 @@ export { useDocumentAutosave, relativeTime, generateId } from './views/document-
 export {
   findMatches, buildOverlaySegments, splitMatchByGroups, runUnitTests, genCode, REFERENCE_DATA,
 } from './views/regex-tester-helpers.js'
+export { useFind } from './find/use-find.js'
+export { FindBar } from './find/find-bar.jsx'
+export { useFindShortcut } from './find/use-find-shortcut.js'
