@@ -1,8 +1,8 @@
 // git-view.jsx — read-only repository browser for Android: a searchable repo list, then a repo
 // with Files (folders, README, a file viewer) and Commits (grouped by day, with a commit sheet).
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { timeAgo, resolveRepo, targetPlace } from '@nexusmd/core';
-import { MarkdownPreview, pinToHome } from '@nexusmd/ui';
+import { timeAgo, resolveRepo, targetPlace, findMatches, splitAtMatches, FIND_LIMIT } from '@nexusmd/core';
+import { MarkdownPreview, pinToHome, useFind, FindBar, useFindShortcut, useDomFind, ensureFindStyle } from '@nexusmd/ui';
 import { Icon } from './icons.jsx';
 import { toast } from './toast.jsx';
 import { Sheet } from './components.jsx';
@@ -42,6 +42,9 @@ const isMarkdown = (p) => /\.(md|markdown)$/i.test(p);
 const copy = (text) => (navigator.clipboard?.writeText(text) ?? Promise.reject(new Error('Copying is not available here.')))
   .then(() => toast('Copied', 'success'), (e) => toast(`Could not copy. ${e?.message || ''}`.trim(), 'error'));
 
+// Given to useDomFind while the file is shown as code instead: closed, so it reports nothing.
+const NO_FIND = { open: false, query: '', matchCase: false, index: 0, count: 0, report() {} };
+
 function RepoRow({ repo, onOpen }) {
   return (
     <div className="m-row" onClick={() => onOpen(repo)}>
@@ -64,18 +67,48 @@ function FileViewer({ repo, branch, path, onBack, onFlash, onPin }) {
     backend.getFile(repo, branch, path).then(setText).catch(e => setError(errText(e)));
   }, [repo, branch, path]);
   const md = isMarkdown(path);
+
+  // Find in the file: rendered Markdown is searched in the page; the code view marks its own lines.
+  const find = useFind();
+  const { report: reportFind } = find;
+  const screenRef = useRef(null);
+  const renderedRef = useRef(null);
+  const rendered = md && !raw;
+  const lines = useMemo(() => (text === null ? [] : text.split('\n')), [text]);
+  useFindShortcut(screenRef, find);
+  useDomFind(renderedRef, rendered ? find : NO_FIND, text);
+  // Matches per line, numbered across the whole file (the first line's first match is 0).
+  const plain = useMemo(() => {
+    if (text === null || rendered || !find.open || !find.query) return null;
+    let total = 0;
+    const per = lines.map(line => {
+      const ms = findMatches(line, find.query, { matchCase: find.matchCase, limit: FIND_LIMIT - total });
+      const first = total; total += ms.length;
+      return { ms, first };
+    });
+    return { per, total };
+  }, [lines, text, rendered, find.open, find.query, find.matchCase]);
+  // After useDomFind's effect, which reports 0 while the code view is showing.
+  useEffect(() => { if (!rendered) reportFind(plain ? plain.total : 0); }, [rendered, plain, reportFind]);
+  useEffect(() => {
+    if (!plain) return;
+    ensureFindStyle();
+    screenRef.current?.querySelector('mark[data-find-current]')?.scrollIntoView?.({ block: 'center' });
+  }, [plain, find.index]);
   return (
     <>
       <div className="m-appbar">
         <button type="button" className="m-iconbtn" onClick={onBack} aria-label="Back"><Icon name="chevron-left" size={18}/></button>
         <div className="m-ab-lead"><div><h1 style={{ fontSize: 16 }}>{path.split('/').pop()}</h1><div className="m-ab-sub">{path}</div></div></div>
         <div className="m-ab-actions">
+          <button type="button" className="m-iconbtn" title="Find in file" aria-label="Find in file" onClick={() => find.setOpen(true)}><Icon name="search" size={17}/></button>
           <button type="button" className="m-iconbtn" title="Copy path" onClick={() => { copy(path); onFlash?.('Path copied'); }}><Icon name="copy" size={17}/></button>
           {onPin && <button type="button" className="m-iconbtn" title="Pin to Home" aria-label="Pin to Home" onClick={onPin}><Icon name="pin" size={17}/></button>}
           {!md || raw ? <button type="button" className={`m-iconbtn${wrap ? ' active' : ''}`} title="Wrap lines" onClick={() => setWrap(w => !w)}><Icon name="list" size={17}/></button> : null}
         </div>
       </div>
-      <div className="m-screen">
+      <div className="m-screen" ref={screenRef}>
+        <FindBar find={find} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid var(--border)' }}/>
         {md && (
           <div className="m-seg" style={{ marginBottom: 12 }}>
             <button type="button" className={!raw ? 'active' : ''} onClick={() => setRaw(false)}>Rendered</button>
@@ -84,12 +117,19 @@ function FileViewer({ repo, branch, path, onBack, onFlash, onPin }) {
         )}
         {error && <div className="m-error">{error}</div>}
         {text === null && !error && <div className="muted">Loading…</div>}
-        {text !== null && (md && !raw
-          ? <MarkdownPreview markdown={text}/>
+        {text !== null && (rendered
+          ? <div ref={renderedRef}><MarkdownPreview markdown={text}/></div>
           : <div className={`m-code${wrap ? ' wrap' : ''}`}>
-              {text.split('\n').map((line, i) => (
-                <div key={i} className="ln"><span className="no">{i + 1}</span><span className="tx">{line || ' '}</span></div>
-              ))}
+              {lines.map((line, i) => {
+                const hit = plain?.per[i];
+                return (
+                  <div key={i} className="ln"><span className="no">{i + 1}</span><span className="tx">{hit?.ms.length
+                    ? splitAtMatches(line, hit.ms).map((seg, k) => (seg.hit
+                      ? <mark key={k} data-find="" {...(hit.first + seg.matchIndex === find.index ? { 'data-find-current': '' } : null)}>{seg.text}</mark>
+                      : seg.text))
+                    : (line || ' ')}</span></div>
+                );
+              })}
             </div>)}
       </div>
     </>

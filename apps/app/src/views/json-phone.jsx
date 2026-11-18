@@ -1,7 +1,7 @@
 // json-phone.jsx — the JSON tool on a phone: one focused pane, Edit or Tree. It shares the desktop
 // layout's autosave hook and storage key, so saved documents carry over.
 import React from 'react';
-import { useDocumentAutosave, JsonNodeSheet } from '@nexusmd/ui';
+import { useDocumentAutosave, JsonNodeSheet, useFind, FindBar, useFindShortcut, useTextareaFind } from '@nexusmd/ui';
 import { Icon } from '../icons.jsx';
 import { toast } from '../toast.jsx';
 import { ToolFrame, DocsSheet, PinDocButton } from './docs-frame.jsx';
@@ -66,6 +66,9 @@ function TreeNode({ k, v, depth, path, flipped, flip, onEdit, search }) {
   );
 }
 
+// Given to the find hooks while the tree shows: closed, and Ctrl+F does nothing.
+const NO_FIND = { open: false, query: '', matchCase: false, index: 0, count: 0, report() {}, setOpen() {} };
+
 // `openDocId` (a Home shortcut) opens that saved document; the most recent one is resumed when it is gone.
 export function JsonPhone({ tool, setTool, onFlash, openDocId = null }) {
   const d = useDocumentAutosave({
@@ -78,6 +81,13 @@ export function JsonPhone({ tool, setTool, onFlash, openDocId = null }) {
   const [flipped, setFlipped] = useState(() => new Set());
   const [editPath, setEditPath] = useState(null);
   const [term, setTerm] = useState('');
+  // Find in the JSON text (Edit mode). The tree has its own search box, so Tree mode has no Find button.
+  const find = useFind();
+  const textRef = React.useRef(null);
+  const frameRef = React.useRef(null);
+  useTextareaFind(textRef, d.content, mode === 'edit' ? find : NO_FIND);
+  useFindShortcut(frameRef, mode === 'edit' ? find : NO_FIND);
+  useEffect(() => { if (mode !== 'edit') find.close(); }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const parsed = useMemo(() => parseJson(d.content), [d.content]);
   const flip = (p) => setFlipped(s => { const n = new Set(s); n.has(p) ? n.delete(p) : n.add(p); return n; });
   const current = d.docs.find(x => x.id === d.currentDocId);
@@ -96,13 +106,18 @@ export function JsonPhone({ tool, setTool, onFlash, openDocId = null }) {
   return (
     <>
       <ToolFrame sub={title} tool={tool} setTool={setTool} onDocs={() => setSheet(true)} onNew={() => { d.newDoc(); setMode('edit'); }}
-        actions={<PinDocButton tool="json" doc={current}/>}
+        actions={<>
+          {mode === 'edit' && <button type="button" className="m-iconbtn" aria-label="Find in file" onClick={() => find.setOpen(true)}><Icon name="search" size={17}/></button>}
+          <PinDocButton tool="json" doc={current}/>
+        </>}
         footer={(
           <div className="m-docs-foot">
             <span className={`m-json-state ${parsed.ok ? 'ok' : 'bad'}`}>{parsed.ok ? 'Valid JSON' : 'Invalid JSON'}</span>
             <span className="m-docs-status">{status}</span>
           </div>
         )}>
+        <div ref={frameRef} style={{ display: 'contents' }}/>
+        <FindBar find={find} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid var(--border)' }}/>
         <div className="m-seg" style={{ margin: '0 0 10px' }}>
           <button type="button" className={mode === 'edit' ? 'active' : ''} onClick={() => setMode('edit')}>Edit</button>
           <button type="button" className={mode === 'tree' ? 'active' : ''} onClick={() => setMode('tree')}>Tree</button>
@@ -114,7 +129,7 @@ export function JsonPhone({ tool, setTool, onFlash, openDocId = null }) {
               <button type="button" className="m-chip" disabled={!parsed.ok} onClick={() => act(v => JSON.stringify(v))}>Minify</button>
               <button type="button" className="m-chip" onClick={() => { copy(d.content); onFlash?.('Copied'); }}>Copy</button>
             </div>
-            <textarea className="m-docs-text" value={d.content} onChange={e => d.setContent(e.target.value)}
+            <textarea ref={textRef} className="m-docs-text" value={d.content} onChange={e => d.setContent(e.target.value)}
               spellCheck={false} autoCapitalize="off" autoCorrect="off" aria-label="JSON"/>
             {!parsed.ok && d.content.trim() && <div className="m-error" role="alert">{parsed.message}</div>}
           </>

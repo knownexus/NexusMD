@@ -98,3 +98,17 @@ describe('editing the JSON tree', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
+
+describe('JSON find', () => {
+  it('in Edit it finds in the text and selects the match; Tree mode keeps its own search and has no Find button', () => {
+    render(<DocumentsPhone onFlash={vi.fn()}/>)
+    fireEvent.click(screen.getByRole('button', { name: 'Find in file' }))
+    fireEvent.change(screen.getByRole('search').querySelector('input'), { target: { value: 'Alice' } })
+    expect(document.querySelector('[role="search"] [aria-live]').textContent).toBe('1 of 1')
+    const ta = screen.getByLabelText('JSON')
+    expect(ta.value.slice(ta.selectionStart, ta.selectionEnd)).toBe('Alice')
+    fireEvent.click(screen.getByRole('button', { name: 'Tree' }))
+    expect(screen.queryByRole('button', { name: 'Find in file' })).toBeNull()
+    expect(screen.getByLabelText('Search the tree')).toBeTruthy()
+  })
+})

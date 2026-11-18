@@ -208,3 +208,63 @@ describe('MarkdownViewer original files', () => {
     ))
   })
 })
+
+describe('MarkdownViewer find', () => {
+  const ctrlF = () => fireEvent.keyDown(window, { key: 'f', ctrlKey: true })
+  const editor = () => screen.getByPlaceholderText(/Start writing/)
+  const bar = () => screen.getByLabelText('Find in file')
+  const status = () => document.querySelector('[role="search"] [aria-live]').textContent
+  const HLJS = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js'
+  beforeEach(() => {
+    localStorage.clear()
+    // Mark highlight.js as loaded, so the preview renders.
+    const sc = document.createElement('script')
+    sc.src = HLJS
+    document.head.appendChild(sc)
+    window.hljs = { highlightElement: () => {} }
+  })
+  afterEach(() => {
+    cleanup()
+    localStorage.clear()
+    document.head.querySelectorAll(`script[src="${HLJS}"]`).forEach(x => x.remove())
+    delete window.hljs
+  })
+
+  it('Ctrl+F opens the bar, counts matches in the text and steps with Enter', () => {
+    render(<MarkdownViewer />)
+    fireEvent.change(editor(), { target: { value: 'foo bar foo' } })
+    ctrlF()
+    fireEvent.change(bar(), { target: { value: 'foo' } })
+    expect(status()).toBe('1 of 2')
+    fireEvent.keyDown(bar(), { key: 'Enter' })
+    expect(status()).toBe('2 of 2')
+    expect([editor().selectionStart, editor().selectionEnd]).toEqual([8, 11])
+  })
+  it('leaves the document alone while finding', () => {
+    render(<MarkdownViewer />)
+    fireEvent.change(editor(), { target: { value: 'foo bar foo' } })
+    ctrlF()
+    fireEvent.change(bar(), { target: { value: 'foo' } })
+    fireEvent.keyDown(bar(), { key: 'Enter' })
+    expect(editor().value).toBe('foo bar foo')
+  })
+  it('marks the matches in the preview when the preview is the pane being used', async () => {
+    render(<MarkdownViewer />)
+    fireEvent.change(editor(), { target: { value: '# Foo\n\nfoo bar' } })
+    const prev = document.querySelector('.md-content:not([data-testid])')
+    await waitFor(() => expect(prev.querySelector('h1')).toBeTruthy())
+    fireEvent.mouseDown(prev)
+    ctrlF()
+    fireEvent.change(bar(), { target: { value: 'foo' } })
+    await waitFor(() => expect(prev.querySelectorAll('mark[data-find]')).toHaveLength(2))
+    expect(status()).toBe('1 of 2')
+  })
+  it('Escape closes the bar and puts the cursor back in the editor', () => {
+    render(<MarkdownViewer />)
+    fireEvent.change(editor(), { target: { value: 'foo' } })
+    ctrlF()
+    fireEvent.keyDown(bar(), { key: 'Escape' })
+    expect(screen.queryByLabelText('Find in file')).toBeNull()
+    expect(document.activeElement).toBe(editor())
+  })
+})

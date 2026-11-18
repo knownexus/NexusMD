@@ -2,7 +2,7 @@
 // sits above the keyboard, autosave into the same `md_documents` store the desktop layout uses, and
 // Export. Opens on the most recently edited document.
 import React from 'react';
-import { MarkdownPreview, MarkdownDiff, generateId } from '@nexusmd/ui';
+import { MarkdownPreview, MarkdownDiff, generateId, useFind, FindBar, useFindShortcut, useDomFind, useTextareaFind } from '@nexusmd/ui';
 import { Icon } from '../icons.jsx';
 import { pickerAdapter } from '../adapters/picker.js';
 import { Sheet } from '../components.jsx';
@@ -92,11 +92,22 @@ function useMdDocs(openDocId = null) {
   };
 }
 
+// Given to the find adapter of the mode not being searched: closed, so it reports nothing.
+const NO_FIND = { open: false, query: '', matchCase: false, index: 0, count: 0, report() {} };
+
 export function MarkdownPhone({ tool, setTool, onFlash, openDocId = null }) {
   const m = useMdDocs(openDocId);
   const [mode, setMode] = React.useState('edit');
   const [sheet, setSheet] = React.useState(false);
   const ta = React.useRef(null);
+  // Find in the document: the text box in Edit, the rendered text in Preview (not in Compare).
+  const find = useFind();
+  const frameRef = React.useRef(null);
+  const previewRef = React.useRef(null);
+  useTextareaFind(ta, m.content, mode === 'edit' ? find : NO_FIND);
+  useDomFind(previewRef, mode === 'preview' ? find : NO_FIND, m.content);
+  useFindShortcut(frameRef, find);
+  React.useEffect(() => { if (mode === 'compare') find.close(); }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [cheat, setCheat] = React.useState(false);
   const [learn, setLearn] = React.useState(readLearn);
   const [hit, setHit] = React.useState(null);        // what was tapped in the preview
@@ -129,13 +140,18 @@ export function MarkdownPhone({ tool, setTool, onFlash, openDocId = null }) {
   return (
     <>
       <ToolFrame sub={title} tool={tool} setTool={setTool} onDocs={() => setSheet(true)} onNew={() => { m.create(); setMode('edit'); }}
-        actions={<><PinDocButton tool="markdown" doc={current}/><button type="button" className="m-iconbtn" aria-label="Export" onClick={exportDoc}><Icon name="send" size={17}/></button></>}
+        actions={<>
+          {mode !== 'compare' && <button type="button" className="m-iconbtn" aria-label="Find in file" onClick={() => find.setOpen(true)}><Icon name="search" size={17}/></button>}
+          <PinDocButton tool="markdown" doc={current}/><button type="button" className="m-iconbtn" aria-label="Export" onClick={exportDoc}><Icon name="send" size={17}/></button>
+        </>}
         footer={(
           <div className="m-docs-foot">
             <span>{wordCount(m.content).toLocaleString()} words · {m.content ? m.content.split('\n').length : 0} lines</span>
             <span className="m-docs-status">{status}</span>
           </div>
         )}>
+        <div ref={frameRef} style={{ display: 'contents' }}/>
+        <FindBar find={find} style={{ marginBottom: 10, borderRadius: 8, border: '1px solid var(--border)' }}/>
         <div className="m-seg" style={{ margin: '0 0 10px' }}>
           <button type="button" className={mode === 'edit' ? 'active' : ''} onClick={() => setMode('edit')}>Edit</button>
           <button type="button" className={mode === 'preview' ? 'active' : ''} onClick={() => setMode('preview')}>Preview</button>
@@ -174,7 +190,7 @@ export function MarkdownPhone({ tool, setTool, onFlash, openDocId = null }) {
               <button type="button" className={`m-chip${learn ? ' active' : ''}`} aria-pressed={learn} onClick={toggleLearn}>Learn mode</button>
               {learn && <span className="m-hint" style={{ alignSelf: 'center', margin: 0 }}>Tap anything to see its Markdown</span>}
             </div>
-            <div className="m-docs-preview" onClick={learn ? (e) => setHit(learnTarget(e.target, e.currentTarget)) : undefined}>
+            <div className="m-docs-preview" ref={previewRef} onClick={learn ? (e) => setHit(learnTarget(e.target, e.currentTarget)) : undefined}>
               {m.content.trim() ? <MarkdownPreview markdown={m.content} ctrlWheel={false}/> : <div className="muted">Nothing to preview yet.</div>}
             </div>
             {learn && hit && (
