@@ -9,6 +9,7 @@ Find a specific line or statement in a repo: type a term, see which files contai
 - Tapping a result opens the file at that line with the find bar already holding the term.
 - Match case toggle; plain text (not regex). Case-insensitive by default, as find-in-file.
 - Results are capped (files, matches per file, total) and say so when capped.
+- **A scope you choose** before searching: the whole repo, the folder you are in, or a chosen set of folders and file types (for example `src/` and `*.cs`). The scope is remembered per repo.
 
 ## Non-goals
 - Searching other branches, other repos or history.
@@ -33,7 +34,10 @@ Find a specific line or statement in a repo: type a term, see which files contai
 ## Design
 - **Core (`@nexusmd/core`)**: a pure `searchTexts(files, query, opts)` for the Android side (files: `[{ path, text }]`), reusing `findMatches`; returns `{ results: [{ path, matches: [{ line, text, start, end }] }], capped }`. Caps: 200 files with matches, 50 matches per file, 1000 total.
 - **Desktop**: new `grep` on `IGitAdapter` (`modules/git`, main-process `git-files.cjs`), running `git grep -n -I -F --no-color` (`-i` unless match case) on the worktree at the checked-out state, with the same caps, and returning the same result shape. Skips binary files (`-I`). A search box in the Git file explorer (renderer) lists the results; clicking one opens the file via the existing explorer selection with the `CodeEditor` `line` prop and the find bar opened on the term.
-- **Android**: on first search for a (repo, branch) the app downloads the branch as a zip (Azure DevOps items API with `$format=zip`; GitHub zipball for the ref), unpacks it with `jszip`, keeps text files under 1 MB, and searches them with `searchTexts`. The unpacked texts are cached in memory per (repo, branch, commit id) and dropped when the branch head changes or the repo is left. A size guard (about 50 MB compressed) stops with a message instead of downloading. Progress ("Downloading…", "Searching…") shows in the results area.
+- **Scope** (both platforms): `{ folders: string[], extensions: string[] }`, empty meaning everything; a file is in scope when it is under one of the folders (or none are set) and has one of the extensions (or none are set). A pure `inScope(path, scope)` in `@nexusmd/core` decides it. Desktop passes the scope to `git grep` as pathspecs (`-- 'src/' '*.cs'`). Android lists the branch's file tree (one request), applies `inScope`, and then:
+  - **60 files or fewer in scope:** fetches just those files (no zip) and searches them.
+  - **More than 60:** shows how many files and, when known, the download size, and downloads the branch as a zip (Azure DevOps items API with `$format=zip`; GitHub zipball for the ref), unpacking it with `jszip`, keeping only in-scope text files under 1 MB.
+  - Fetched or unpacked texts are cached in memory per (repo, branch, commit id, file) and dropped when the branch head changes or the repo is left. A size guard (about 50 MB compressed) stops with a message instead of downloading. Progress ("Fetching n of N…", "Searching…") shows in the results area.
 - **Results UI**: the same shape on both (grouped by file, line number and a snippet with the match marked). Android: a search icon in the repo's Files tab opens a search screen; results open the existing `FileViewer` at the line with the find bar open on the term.
 
 ## Decisions made with the user
@@ -42,7 +46,8 @@ Find a specific line or statement in a repo: type a term, see which files contai
 ## My calls (please check)
 - Plain text only, case-insensitive with a toggle; no regex.
 - Desktop covers local repos only; the GitHub tab on desktop is a later step.
-- Android downloads the zip rather than using provider search, for one dependable path on any branch; the 50 MB guard and caps are my numbers.
+- Android fetches individual files for a small scope and falls back to the zip for a large one, instead of using provider search (GitHub's is default-branch only and can be stale); the 60-file switch point, the 50 MB guard and the caps are my numbers.
+- The scope picker offers folders (chosen from the repo's tree) and extensions typed as a list; no free-form glob patterns.
 - Result caps 200 files / 50 per file / 1000 total.
 
 ## Left to the builder
