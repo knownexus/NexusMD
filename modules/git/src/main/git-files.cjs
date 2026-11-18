@@ -105,6 +105,7 @@ async function looksLikeText(file) {
 // Kept in step with SEARCH_CAPS / cutLine in @nexusmd/core (main cannot import that ES module).
 const GREP_CAPS = { files: 200, perFile: 50, total: 1000 };
 const SNIPPET = 300;
+const GREP_MAX_BYTES = 8 * 1024 * 1024;
 const escapeGlob = s => s.replace(/[\\*?[\]]/g, '\\$&');
 const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -163,14 +164,17 @@ function registerFiles(handle, { git, requireExactWorktree, requirePaths, withRe
     if (!matchCase) args.push('-i');
     args.push('-e', query, '--', ...grepPathspecs(folders, extensions));
     // literal: false because the pathspecs use :(top,literal) and :(glob) magic; each is built from escaped text above.
-    const r = await git(wt, args, { literal: false });
+    // maxBytes stops git when a search matches a huge amount, so the output never has to be held whole.
+    const r = await git(wt, args, { literal: false, maxBytes: GREP_MAX_BYTES });
     if (r.code === 1) return { results: [], capped: false };
     if (r.code !== 0) throw new Error(r.stderr || 'git grep failed');
     const results = [];
     let total = 0;
-    let capped = false;
+    let capped = !!r.truncated;
     let current = null;
-    for (const record of r.stdout.split('\n')) {
+    const records = r.stdout.split('\n');
+    if (r.truncated) records.pop(); // the last record was cut off
+    for (const record of records) {
       if (!record) continue;
       // With -z a record is  path NUL line NUL text
       const nul = record.indexOf('\0');

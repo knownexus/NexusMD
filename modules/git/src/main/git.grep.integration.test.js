@@ -95,6 +95,16 @@ describe('git:grep against a real repository', () => {
     expect(r.results.find(x => x.path === 'src/many.cs').matches).toHaveLength(50)
     expect(r.capped).toBe(true)
   })
+  it('stops git and says so when the output gets huge, instead of buffering all of it', async () => {
+    fs.mkdirSync(disk('big'), { recursive: true })
+    const line = 'x'.repeat(2 * 1024 * 1024) + 'foo\n'
+    for (let i = 0; i < 8; i++) fs.writeFileSync(disk(`big/f${i}.txt`), line)
+    const r = await grep('foo', { folders: ['big'] })
+    expect(r.capped).toBe(true)
+    expect(r.results.length).toBeGreaterThan(0)
+    expect(r.results.length).toBeLessThan(8)
+    for (const f of r.results) for (const m of f.matches) expect(m.text.length).toBeLessThanOrEqual(300)
+  })
   it('cuts a very long line to a short snippet that still holds the match', async () => {
     const m = (await grep('foo', { folders: ['src'], extensions: ['js'] })).results[0].matches[0]
     expect(m.text.length).toBeLessThanOrEqual(300)

@@ -288,7 +288,9 @@ function register(ipcMain, deps = {}) {
     if (next) next.resolve(); else active--;
   };
 
-  async function git(cwd, args, { input = null, timeout = timeoutMs, literal = true, extraConfig = [], env: extraEnv = null } = {}) {
+  // maxBytes: stop git once it has written more than this to stdout (a search that matches a huge amount); the result then
+  // has truncated: true, code 0, and stdout holds what arrived (its last record may be cut off).
+  async function git(cwd, args, { input = null, timeout = timeoutMs, literal = true, extraConfig = [], env: extraEnv = null, maxBytes = 0 } = {}) {
     const exe = gitExecutable();
     if (!exe) throw new Error('Git not found');
     await acquire();
@@ -314,12 +316,22 @@ function register(ipcMain, deps = {}) {
           Promise.resolve(kill(child.pid)).catch(ignored(modLog, 'stopping a timed-out git process'));
           reject(new Error(`git ${args[0]} timed out after ${Math.round(timeout / 1000)}s`));
         }), timeout);
-        child.stdout.on('data', c => out.push(Buffer.from(c)));
+        let size = 0;
+        let cut = false;
+        child.stdout.on('data', c => {
+          if (cut) return;
+          out.push(Buffer.from(c));
+          size += c.length;
+          if (maxBytes && size > maxBytes) {
+            cut = true;
+            Promise.resolve(kill(child.pid)).catch(ignored(modLog, 'stopping git after its output reached the limit'));
+          }
+        });
         child.stderr.on('data', c => err.push(Buffer.from(c)));
         child.on('error', e => done(() => { modLog.error('could not start git', e, { executable: exe }); reject(new Error(`Couldn't start git: ${e.message}`)); }));
         child.on('close', code => done(() => {
           const bytes = Buffer.concat(out);
-          resolve({ code, stdout: bytes.toString('utf8'), raw: bytes, stderr: Buffer.concat(err).toString('utf8').trim(), bytes: bytes.length });
+          resolve({ code: cut ? 0 : code, stdout: bytes.toString('utf8'), raw: bytes, stderr: Buffer.concat(err).toString('utf8').trim(), bytes: bytes.length, ...(cut ? { truncated: true } : null) });
         }));
         if (input != null) {
           // A write to a process that already exited must not crash main.
