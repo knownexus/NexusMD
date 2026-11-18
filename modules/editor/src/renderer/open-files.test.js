@@ -21,11 +21,11 @@ function setup({ documents = true, files = {}, take } = {}) {
 const settled = () => new Promise(r => setTimeout(r, 0))
 
 describe('routing the files the desktop app is opened with', () => {
-  it('sends a Markdown file to Documents as a copy, not to the Editor', async () => {
+  it('sends a Markdown file to Documents with its original-file metadata, not to the Editor', async () => {
     const t = setup({ files: { 'C:\\n\\plan.md': { text: '# Plan' } } })
     t.open(['C:\\n\\plan.md'])
     await settled()
-    expect(t.calls).toEqual([{ name: 'plan.md', text: '# Plan' }])
+    expect(t.calls).toEqual([{ name: 'plan.md', text: '# Plan', path: 'C:\\n\\plan.md', stamp: null, bom: false }])
     expect(t.store.openPath).not.toHaveBeenCalled()
     expect(t.host.navigate).not.toHaveBeenCalledWith('editor')
     expect(t.notify).toHaveBeenCalledWith('Opened plan.md', 'success')
@@ -35,7 +35,7 @@ describe('routing the files the desktop app is opened with', () => {
     const t = setup({ files: { '/n/a.json': { text: '{"broken":' } } })
     t.open(['/n/a.json'])
     await settled()
-    expect(t.calls).toEqual([{ name: 'a.json', text: '{"broken":' }])
+    expect(t.calls).toEqual([{ name: 'a.json', text: '{"broken":', path: '/n/a.json', stamp: null, bom: false }])
     expect(t.store.openPath).not.toHaveBeenCalled()
   })
 

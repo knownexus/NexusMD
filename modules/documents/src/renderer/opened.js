@@ -14,16 +14,22 @@ export function createOpenedFiles({ storage = globalThis.localStorage, profileKe
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
     /** Adds { name, text } to the Markdown or JSON documents. Throws a message fit to show when it cannot. */
     add(file) {
-      let tool, result
-      if (isJsonFile(file)) {
-        tool = 'json'
-        result = addOpenedJsonDocument(storage, file, { key: profileKey('json_editor_documents') })
-      } else if (isMarkdownFile(file)) {
-        tool = 'markdown'
-        result = addOpenedDocument(storage, file, { key: profileKey('md_documents') })
-      } else {
+      const tool = isJsonFile(file) ? 'json' : isMarkdownFile(file) ? 'markdown' : null
+      if (!tool) {
         throw new Error(`${file?.name || 'That file'} is not a Markdown or JSON file.`)
       }
+      // A native path means the desktop shell has handed us a real file. Keep
+      // that source session in memory instead of serialising a second copy of
+      // its text into the profile's managed-documents store.
+      if (file?.path) {
+        const source = { path: file.path, name: file.name, text: String(file.text ?? ''), stamp: file.stamp ?? null, bom: !!file.bom }
+        snapshot = { count: snapshot.count + 1, tool, docId: null, source }
+        listeners.forEach(fn => fn())
+        return { tool, source, created: false, name: documentNameOf(file.name) }
+      }
+      const result = tool === 'json'
+        ? addOpenedJsonDocument(storage, file, { key: profileKey('json_editor_documents') })
+        : addOpenedDocument(storage, file, { key: profileKey('md_documents') })
       snapshot = { count: snapshot.count + 1, tool, docId: null }
       listeners.forEach(fn => fn())
       return { tool, ...result, name: documentNameOf(file.name) }

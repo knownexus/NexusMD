@@ -565,7 +565,7 @@ function MarkdownToolbar({ onInsert }) {
 
 // `openNewest`: start with the most recently edited saved document open (a file the app was opened with is the newest),
 // instead of a blank page. `openDocId`: open that saved document instead (a Home shortcut to it); a blank page when it is gone.
-function MarkdownViewer({ openNewest = false, openDocId = null }) {
+function MarkdownViewer({ openNewest = false, openDocId = null, source = null }) {
   // Documents and learning state belong to the active profile.
   const { getProfileKey } = useNexusData();
   const KEYS = React.useMemo(() => ({
@@ -610,6 +610,28 @@ function MarkdownViewer({ openNewest = false, openDocId = null }) {
   const saveStatusTimerRef = useRefMD(null);
   const markdownRef        = useRefMD('');
   const isLoadingDoc       = useRefMD(!!newest); // a document opened at the start is not an edit, so it is not saved again
+  const sourceRef          = useRefMD(source);
+  const [externalSaveError, setExternalSaveError] = useStateMD('');
+  const [autosaveMs, setAutosaveMs] = useStateMD(() => {
+    if (!source?.path) return 0;
+    return Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0;
+  });
+
+  // A desktop file association hands Documents a trusted path and its read
+  // stamp. It is deliberately not made into a profile document: Save writes
+  // straight back to that path.
+  useEffectMD(() => {
+    sourceRef.current = source;
+    if (!source?.path) return;
+    clearTimeout(saveTimerRef.current);
+    clearTimeout(createDocTimerRef.current);
+    isLoadingDoc.current = true;
+    setCurrentDocId(null);
+    setMarkdown(source.text ?? '');
+    setExternalSaveError('');
+    setSaveStatus('');
+    setAutosaveMs(Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0);
+  }, [source?.path, source?.stamp]);
 
   // The Compare view's other document: the one picked, else the most recently edited other one.
   const otherDocs  = docs.filter(d => d.id !== currentDocId).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -660,6 +682,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null }) {
   useEffectMD(() => {
     // Skip when we programmatically loaded a document (not a user edit)
     if (isLoadingDoc.current) { isLoadingDoc.current = false; return; }
+    if (sourceRef.current?.path) { setSaveStatus('unsaved'); return; }
 
     clearTimeout(saveTimerRef.current);
     clearTimeout(createDocTimerRef.current);
@@ -719,6 +742,44 @@ function MarkdownViewer({ openNewest = false, openDocId = null }) {
       clearTimeout(createDocTimerRef.current);
     };
   }, [markdown, currentDocId]);
+
+  const saveNow = useCallbackMD(async () => {
+    const openSource = sourceRef.current;
+    if (openSource?.path) {
+      const api = window.electronAPI?.editor;
+      if (!api?.write) { setExternalSaveError('This file cannot be saved from this platform.'); return; }
+      setSaveStatus('saving'); setExternalSaveError('');
+      try {
+        const result = await api.write(openSource.path, markdownRef.current, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
+        if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
+        sourceRef.current = { ...openSource, stamp: result.stamp };
+        setSaveStatus('saved');
+      } catch (err) { setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
+      return;
+    }
+    if (!markdownRef.current) return;
+    const content = markdownRef.current;
+    const current = currentDocId;
+    const next = current
+      ? docs.map(d => d.id === current ? { ...d, content, autoName: extractAutoName(content), updatedAt: Date.now() } : d)
+      : [...docs, { id: generateId(), name: null, autoName: extractAutoName(content), content, createdAt: Date.now(), updatedAt: Date.now() }];
+    try { saveDocs(next, KEYS.docs); setDocs(next); if (!current) setCurrentDocId(next.at(-1).id); setSaveStatus('saved'); }
+    catch { setSaveStatus('error'); }
+  }, [currentDocId, docs, KEYS.docs]);
+
+  // Autosave is opt-in for an original file. It never runs for an unchanged
+  // buffer and uses the same conflict-safe save path as the button.
+  useEffectMD(() => {
+    if (!source?.path || !autosaveMs || saveStatus !== 'unsaved') return;
+    const timer = setTimeout(() => { saveNow() }, autosaveMs);
+    return () => clearTimeout(timer);
+  }, [source?.path, autosaveMs, saveStatus, saveNow]);
+
+  const chooseAutosave = (value) => {
+    const next = Number(value) || 0;
+    setAutosaveMs(next);
+    if (source?.path) localStorage.setItem(`nexusmd.documents.autosave.${source.path}`, String(next));
+  };
 
   // Cleanup timers on unmount
   useEffectMD(() => () => {
@@ -894,6 +955,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null }) {
 
   // Tab key in editor
   const onKeyDown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveNow(); return; }
     if (e.key !== "Tab") return;
     e.preventDefault();
     const s   = e.target.selectionStart;
@@ -1131,6 +1193,18 @@ function MarkdownViewer({ openNewest = false, openDocId = null }) {
               </span>
             )}
           </div>
+
+          <button style={{ ...barBtnStyle, background: 'var(--accent)', color: 'var(--accent-fg)', borderColor: 'var(--accent)' }} onClick={saveNow} title="Save (Ctrl+S)">
+            Save
+          </button>
+
+          {source?.path && <span style={{ fontSize: 11, color: 'var(--text-subtle)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={source.path}>Original file</span>}
+          {source?.path && <label style={{ fontSize: 11, color: 'var(--text-subtle)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            Autosave
+            <select aria-label="Autosave interval" value={autosaveMs} onChange={e => chooseAutosave(e.target.value)} style={{ fontSize: 11 }}>
+              <option value="0">Off</option><option value="15000">15 sec</option><option value="30000">30 sec</option><option value="60000">1 min</option><option value="300000">5 min</option>
+            </select>
+          </label>}
 
           {/* Open file */}
           <label style={barBtnStyle}>

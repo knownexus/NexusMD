@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createOpenedFiles } from './opened.js'
 
-// A file opened with the desktop app (double-click, "Open with") that is Markdown or JSON becomes a saved document, as on Android:
-// a copy kept in the app, in the tool's own store, under the active profile's key.
+// A file opened with the desktop app (double-click, "Open with") becomes a
+// document for its editor. Path-backed Markdown instead stays linked to its
+// original file so Save can write it back in place.
 function memStorage() {
   const m = new Map()
   return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }
@@ -22,6 +23,14 @@ describe('files opened with the desktop app', () => {
     expect(saved[0]).toMatchObject({ name: 'notes', content: '# Plan\nbody' })
   })
 
+  it('keeps a path-backed Markdown file out of managed document storage', () => {
+    const { storage, opened } = make()
+    const r = opened.add({ name: 'readme.md', text: '# Original', path: 'C:\\work\\readme.md', stamp: 'abc', bom: true })
+    expect(r).toMatchObject({ tool: 'markdown', source: { path: 'C:\\work\\readme.md', stamp: 'abc', bom: true } })
+    expect(storage.getItem('p1:md_documents')).toBeNull()
+    expect(opened.getSnapshot()).toMatchObject({ tool: 'markdown', source: { path: 'C:\\work\\readme.md', text: '# Original' } })
+  })
+
   it('adds a JSON file to the JSON editor documents, as a plain array, even when it does not parse', () => {
     const { storage, opened } = make()
     expect(opened.add({ name: 'ok.json', text: '{"a":1}' })).toMatchObject({ tool: 'json', created: true })
@@ -29,6 +38,14 @@ describe('files opened with the desktop app', () => {
     const saved = JSON.parse(storage.getItem('p1:json_editor_documents'))
     expect(Array.isArray(saved)).toBe(true)
     expect(saved.map(d => d.content)).toEqual(['{"a":1}', '{"a":'])
+  })
+
+  it('keeps a path-backed JSON file out of managed document storage', () => {
+    const { storage, opened } = make()
+    expect(opened.add({ name: 'settings.json', text: '{"theme":"dark"}', path: 'C:\\work\\settings.json' }))
+      .toMatchObject({ tool: 'json', source: { path: 'C:\\work\\settings.json' }, created: false })
+    expect(storage.getItem('p1:json_editor_documents')).toBeNull()
+    expect(opened.getSnapshot()).toMatchObject({ count: 1, tool: 'json', source: { text: '{"theme":"dark"}' } })
   })
 
   it('refuses a file that is neither, so nothing is saved for it', () => {
