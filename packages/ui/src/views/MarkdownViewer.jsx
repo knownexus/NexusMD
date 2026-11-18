@@ -7,6 +7,11 @@ import { Marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { MARKDOWN_CONTENT_CSS, followPreviewLink, renderPreview, useHighlightJs, useMarkdownTextSize, useCtrlWheelTextSize, TextSizeControls } from './markdown-preview.jsx';
 import { MarkdownDiff } from '../md-extras-ui.jsx';
+import { useFind } from '../find/use-find.js';
+import { FindBar } from '../find/find-bar.jsx';
+import { useFindShortcut } from '../find/use-find-shortcut.js';
+import { useDomFind } from '../find/use-dom-find.js';
+import { useTextareaFind } from '../find/use-textarea-find.js';
 import { useNexusData } from '../data-context.jsx';
 import { pinToHome } from '../pin-shortcut.js';
 import { MD_CHEAT_GROUPS, LEARN_ELEMENTS, rendererLog, ignore } from '@nexusmd/core';
@@ -14,6 +19,9 @@ import { MD_CHEAT_GROUPS, LEARN_ELEMENTS, rendererLog, ignore } from '@nexusmd/c
 const log = rendererLog('documents', 'viewer')
 export { slugifyHeading, addHeadingAnchors, followPreviewLink } from './markdown-preview.jsx';
 const { useState: useStateMD, useEffect: useEffectMD, useRef: useRefMD, useCallback: useCallbackMD } = React;
+
+// What the find adapter of the pane not being searched is given: closed, and its count is not reported.
+const NO_FIND = { open: false, query: '', matchCase: false, index: 0, count: 0, report() {} };
 
 const STORAGE_KEY = 'md_documents';
 const CHEAT_OPEN_KEY     = 'md_cheatsheet_open';
@@ -663,6 +671,17 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
     renderPreview(previewRef.current, markdown, hljs);
   }, [markdown, markedReady, hljsReady]);
 
+  // Find in file: one bar, used on the pane in use. In the split view that is the one last clicked or typed in.
+  const find = useFind();
+  const rootRef = useRefMD(null);
+  const [findPane, setFindPane] = useStateMD('editor');
+  const activePane = view === 'editor' ? 'editor' : (view === 'preview' || view === 'compare') ? 'preview' : findPane;
+  useTextareaFind(editorRef, markdown, activePane === 'editor' ? find : NO_FIND);
+  // After the render effect above, so the matches are put on the freshly rendered preview.
+  useDomFind(previewRef, activePane === 'preview' ? find : NO_FIND, hljsReady ? markdown : null);
+  useFindShortcut(rootRef, find);
+  const closeFind = () => { find.close(); if (activePane === 'editor') editorRef.current?.focus(); };
+
   // Compare view: the other document's preview, beside the open one's
   useEffectMD(() => {
     if (view !== 'compare' || !hljsReady || !compareRef.current || !window.hljs) return;
@@ -754,7 +773,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
         if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
         sourceRef.current = { ...openSource, stamp: result.stamp };
         setSaveStatus('saved');
-      } catch (err) { setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
+      } catch (err) { log.warn('saving the original file failed', err); setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
       return;
     }
     if (!markdownRef.current) return;
@@ -764,7 +783,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
       ? docs.map(d => d.id === current ? { ...d, content, autoName: extractAutoName(content), updatedAt: Date.now() } : d)
       : [...docs, { id: generateId(), name: null, autoName: extractAutoName(content), content, createdAt: Date.now(), updatedAt: Date.now() }];
     try { saveDocs(next, KEYS.docs); setDocs(next); if (!current) setCurrentDocId(next.at(-1).id); setSaveStatus('saved'); }
-    catch { setSaveStatus('error'); }
+    catch (err) { log.warn('saving the document failed', err); setSaveStatus('error'); }
   }, [currentDocId, docs, KEYS.docs]);
 
   // Autosave is opt-in for an original file. It never runs for an unchanged
@@ -1110,7 +1129,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
         .md-learn [data-md-source]:hover { outline-color: var(--accent); background: var(--accent-soft); }
       `}</style>
 
-      <div style={{
+      <div ref={rootRef} style={{
         display:       "flex",
         flexDirection: "column",
         height:        "100%",
@@ -1318,6 +1337,8 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
 
         <MarkdownToolbar onInsert={insertSnippet} />
 
+        <FindBar find={{ ...find, close: closeFind }} />
+
         {/* WORKSPACE */}
         <div
           ref={workspaceRef}
@@ -1338,6 +1359,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
               ref={editorRef}
               value={markdown}
               onChange={(e) => setMarkdown(e.target.value)}
+              onFocus={() => setFindPane('editor')}
               onKeyDown={onKeyDown}
               spellCheck={false}
               placeholder={"# Start writing…\n\nPaste markdown here, open a .md file, or drag one onto the window."}
@@ -1387,7 +1409,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
               )}
               <div style={{ marginLeft: "auto" }}><TextSizeControls size={textSize} onChange={setTextSize} /></div>
             </PaneHeader>
-            <div ref={previewScrollRef} style={{ flex: 1, overflowY: "auto", padding: "28px 36px" }}>
+            <div ref={previewScrollRef} onMouseDown={() => setFindPane('preview')} style={{ flex: 1, overflowY: "auto", padding: "28px 36px" }}>
               <div
                 className={`md-content${learnMode ? ' md-learn' : ''}`}
                 ref={previewRef}

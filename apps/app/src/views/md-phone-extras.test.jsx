@@ -70,3 +70,44 @@ describe('Markdown learn mode', () => {
     expect(document.querySelector('.m-learn')).toBeNull()
   })
 })
+
+describe('Markdown find', () => {
+  const open = () => fireEvent.click(screen.getByRole('button', { name: 'Find in file' }))
+  const type = v => fireEvent.change(screen.getByRole('search').querySelector('input'), { target: { value: v } })
+  const status = () => document.querySelector('[role="search"] [aria-live]').textContent
+
+  it('in Edit it counts matches and selects the current one in the text box', async () => {
+    seed([{ id: 'a', autoName: 'Doc', content: 'foo bar foo', updatedAt: 1 }])
+    render(<DocumentsPhone/>)
+    open()
+    type('foo')
+    expect(status()).toBe('1 of 2')
+    const ta = screen.getByLabelText('Markdown')
+    expect([ta.selectionStart, ta.selectionEnd]).toEqual([0, 3])
+    fireEvent.click(screen.getByLabelText('Next match'))
+    expect([ta.selectionStart, ta.selectionEnd]).toEqual([8, 11])
+  })
+  it('does not raise the keyboard by taking focus from the find box', () => {
+    seed([{ id: 'a', autoName: 'Doc', content: 'foo bar foo', updatedAt: 1 }])
+    render(<DocumentsPhone/>)
+    open()
+    type('foo')
+    fireEvent.click(screen.getByLabelText('Next match'))
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Markdown'))
+  })
+  it('in Preview it marks the matches in the rendered text', async () => {
+    seed([{ id: 'a', autoName: 'Doc', content: '# Foo\n\nfoo bar', updatedAt: 1 }])
+    render(<DocumentsPhone/>)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }))
+    open()
+    type('foo')
+    await waitFor(() => expect(document.querySelectorAll('.m-docs-preview mark[data-find]')).toHaveLength(2))
+    expect(status()).toBe('1 of 2')
+  })
+  it('has no Find button in Compare', () => {
+    seed([{ id: 'a', autoName: 'Doc', content: 'foo', updatedAt: 1 }])
+    render(<DocumentsPhone/>)
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(screen.queryByRole('button', { name: 'Find in file' })).toBeNull()
+  })
+})
