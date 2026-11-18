@@ -56,6 +56,9 @@ function highlight(root, query, matchCase) {
   return { count: hits.length, hits, clear, api }
 }
 
+// A mark, or a highlight range, that is still in the page.
+const alive = h => (h.isConnected !== undefined ? h.isConnected : !!h.startContainer?.isConnected)
+
 function showCurrent(run, index) {
   if (!run) return
   const { hits, api } = run
@@ -79,6 +82,7 @@ function showCurrent(run, index) {
 export function useDomFind(rootRef, find, contentKey) {
   const { open, query, matchCase, index, report } = find
   const run = React.useRef(null)
+  const [rewrites, setRewrites] = React.useState(0)
 
   React.useEffect(() => {
     const root = rootRef.current
@@ -87,9 +91,12 @@ export function useDomFind(rootRef, find, contentKey) {
     const r = highlight(root, query, matchCase)
     run.current = r
     report(r.count)
-    return () => { r.clear(); if (run.current === r) run.current = null }
-  }, [open, query, matchCase, contentKey, rootRef, report])
+    // The element is rewritten under the highlights (a preview rendering again): highlight what replaced them.
+    const watcher = new MutationObserver(() => { if (!r.hits.every(alive)) setRewrites(n => n + 1) })
+    watcher.observe(root, { childList: true, subtree: true })
+    return () => { watcher.disconnect(); r.clear(); if (run.current === r) run.current = null }
+  }, [open, query, matchCase, contentKey, rewrites, rootRef, report])
 
   // After the highlights above, whenever the current match or the matches change.
-  React.useEffect(() => { showCurrent(run.current, index) }, [index, open, query, matchCase, contentKey, find.count])
+  React.useEffect(() => { showCurrent(run.current, index) }, [index, open, query, matchCase, contentKey, rewrites, find.count])
 }

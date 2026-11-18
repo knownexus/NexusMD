@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, cleanup, act } from '@testing-library/react'
+import { render, screen, cleanup, act, waitFor } from '@testing-library/react'
 import { describe, it, expect, afterEach } from 'vitest'
 import { useFind, useDomFind } from '../src/index.js'
 
@@ -68,5 +68,14 @@ describe('useDomFind', () => {
     render(<Host html={`<p>${'a'.repeat(6000)}</p>`} />)
     act(() => { api.setOpen(true); api.setQuery('a') })
     expect(state().startsWith('5000/')).toBe(true)
+  })
+  it('puts the highlights back when the content is re-rendered under it', async () => {
+    render(<Host html="<p>foo</p>" />)
+    act(() => { api.setOpen(true); api.setQuery('foo') })
+    expect(marks()).toHaveLength(1)
+    // What MarkdownPreview does when highlight.js finishes loading: it rewrites its element, text unchanged.
+    act(() => { screen.getByTestId('root').innerHTML = '<p>foo foo foo</p>' })
+    await waitFor(() => expect(marks()).toHaveLength(3))
+    expect(state().startsWith('3/')).toBe(true)
   })
 })
