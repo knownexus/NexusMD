@@ -773,7 +773,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
         if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
         sourceRef.current = { ...openSource, stamp: result.stamp };
         setSaveStatus('saved');
-      } catch (err) { setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
+      } catch (err) { log.warn('saving the original file failed', err); setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
       return;
     }
     if (!markdownRef.current) return;
@@ -783,7 +783,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
       ? docs.map(d => d.id === current ? { ...d, content, autoName: extractAutoName(content), updatedAt: Date.now() } : d)
       : [...docs, { id: generateId(), name: null, autoName: extractAutoName(content), content, createdAt: Date.now(), updatedAt: Date.now() }];
     try { saveDocs(next, KEYS.docs); setDocs(next); if (!current) setCurrentDocId(next.at(-1).id); setSaveStatus('saved'); }
-    catch { setSaveStatus('error'); }
+    catch (err) { log.warn('saving the document failed', err); setSaveStatus('error'); }
   }, [currentDocId, docs, KEYS.docs]);
 
   // Autosave is opt-in for an original file. It never runs for an unchanged

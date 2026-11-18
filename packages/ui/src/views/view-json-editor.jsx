@@ -209,7 +209,7 @@ export function JsonEditorView({ openNewest = false, openDocId = null, source = 
       if (!result?.ok) { showToast(result?.conflict ? 'File changed on disk — your edits are still here' : 'Original file is unavailable — your edits are still here'); return }
       sourceRef.current = { ...openSource, stamp: result.stamp }
       showToast('Saved ✓')
-    } catch (err) { showToast(err?.message || 'Could not save the original file') }
+    } catch (err) { log.warn('saving the original file failed', err); showToast(err?.message || 'Could not save the original file') }
   }, [])
   useEffect(() => {
     if (!externalSource?.path || !autosaveMs || saveStatus !== 'unsaved') return
