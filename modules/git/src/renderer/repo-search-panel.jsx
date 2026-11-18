@@ -1,13 +1,14 @@
 import React from 'react'
-import { normaliseExtensions } from '@nexusmd/core'
+import { normaliseExtensions, rendererLog, ignore } from '@nexusmd/core'
 import { Icon } from '@nexusmd/ui'
 import { ipcMessage } from './use-git-actions.js'
 
+const log = rendererLog('git', 'repo-search')
 const scopeKey = repo => `git_search_scope:${repo?.path}`
 const readScope = repo => {
-  try { return { folders: '', extensions: '', ...JSON.parse(localStorage.getItem(scopeKey(repo)) || '{}') } } catch { return { folders: '', extensions: '' } }
+  try { return { folders: '', extensions: '', ...JSON.parse(localStorage.getItem(scopeKey(repo)) || '{}') } } catch (e) { ignore(log, 'the saved search scope could not be read, so the default is used', e, 'debug'); return { folders: '', extensions: '' } }
 }
-const writeScope = (repo, scope) => { try { localStorage.setItem(scopeKey(repo), JSON.stringify(scope)) } catch { /* storage full or blocked */ } }
+const writeScope = (repo, scope) => { try { localStorage.setItem(scopeKey(repo), JSON.stringify(scope)) } catch (e) { ignore(log, 'the search scope could not be saved', e, 'debug') } }
 const parseFolders = text => [...new Set(String(text).split(/[\n,]+/).map(f => f.trim()).filter(Boolean))]
 
 // The text of a result row with the match marked.
