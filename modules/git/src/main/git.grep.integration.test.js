@@ -112,8 +112,7 @@ describe('git:grep against a real repository', () => {
     expect(hit.text.slice(hit.start, hit.end)).toBe('foo bar')
   })
   it('matches file types whatever their case', async () => {
-    fs.writeFileSync(disk('src/Upper.CS'), 'foo upper
-')
+    fs.writeFileSync(disk('src/Upper.CS'), 'foo upper' + String.fromCharCode(10))
     expect(paths(await grep('foo', { extensions: ['cs'] }))).toContain('src/Upper.CS')
   })
   it('cuts a very long line to a short snippet that still holds the match', async () => {
