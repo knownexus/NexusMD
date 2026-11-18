@@ -75,6 +75,33 @@ describe('RepoSearch', () => {
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
     expect(screen.getByLabelText('Folders').value).toBe('src')
   })
+  it('opens a folder into its subfolders, selects a nested folder, and goes back up by the path', async () => {
+    const files = ['src/app/main.cs', 'src/app/views/home.cs', 'src/lib/util.cs', 'src/top.cs', 'docs/readme.md']
+    mount(make(files))
+    expect(screen.queryByRole('button', { name: 'Open docs' })).toBeNull() // no subfolders, nothing to open
+    fireEvent.click(await screen.findByRole('button', { name: 'Open src' }))
+    expect(screen.queryByRole('button', { name: 'docs' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Open src/app' }))
+    fireEvent.click(screen.getByRole('button', { name: 'views' }))
+    expect(screen.getByLabelText('Folders').value).toBe('src/app/views')
+    fireEvent.click(screen.getByRole('button', { name: 'All of app' }))
+    expect(screen.getByLabelText('Folders').value).toBe('src/app/views, src/app')
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Folder path' })).getByRole('button', { name: 'src' }))
+    expect(screen.getByRole('button', { name: 'lib' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'app' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'All folders' }))
+    expect(screen.getByRole('button', { name: 'docs' })).toBeTruthy()
+    expect(screen.queryByRole('navigation', { name: 'Folder path' })).toBeNull()
+  })
+  it('searches only a nested folder that was chosen', async () => {
+    const files = ['src/app/a.cs', 'src/lib/b.cs']
+    const { backend } = mount(make(files))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open src' }))
+    fireEvent.click(screen.getByRole('button', { name: 'lib' }))
+    search('foo')
+    await screen.findByText('src/lib/b.cs')
+    expect(backend.getFile.mock.calls.map(c => c[2])).toEqual(['/src/lib/b.cs'])
+  })
   it('asks before downloading the branch when many files are in scope, and downloads only when told to', async () => {
     const many = Array.from({ length: 70 }, (_, i) => `src/f${i}.cs`)
     const { backend } = mount(make(many))

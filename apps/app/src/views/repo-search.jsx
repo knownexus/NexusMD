@@ -24,6 +24,19 @@ const readScope = (repo) => {
   try { return { folders: '', extensions: '', ...JSON.parse(localStorage.getItem(scopeKey(repo)) || '{}') }; } catch { return { folders: '', extensions: '' }; }
 };
 const writeScope = (repo, scope) => { try { localStorage.setItem(scopeKey(repo), JSON.stringify(scope)); } catch { /* storage full or blocked */ } };
+// Every folder of the tree, keyed by its parent ('' for the top level), each with its subfolders' names, sorted.
+export function folderTree(files) {
+  const kids = new Map([['', new Set()]]);
+  for (const file of files) {
+    const parts = file.split('/').slice(0, -1);
+    for (let i = 0; i < parts.length; i++) {
+      const parent = parts.slice(0, i).join('/');
+      if (!kids.has(parent)) kids.set(parent, new Set());
+      kids.get(parent).add(parts[i]);
+    }
+  }
+  return new Map([...kids].map(([k, v]) => [k, [...v].sort()]));
+}
 const parseFolders = (text) => [...new Set(String(text).split(/[\n,]+/).map(f => f.trim().replace(/^\/+|\/+$/g, '')).filter(Boolean))];
 
 function Snippet({ match }) {
@@ -41,14 +54,16 @@ export function RepoSearch({ backend, repo, branch, onOpen, onBack }) {
   const [matchCase, setMatchCase] = React.useState(saved?.matchCase ?? false);
   const [scope, setScope] = React.useState(() => readScope(repo));
   const [phase, setPhase] = React.useState(saved ? saved.phase : { name: 'idle' });
-  const [topFolders, setTopFolders] = React.useState([]);
+  const [tree, setTree] = React.useState(() => new Map());
+  const [at, setAt] = React.useState(''); // the folder whose subfolders the chips show ('' is the top level)
   const ctl = React.useRef(null);
 
-  // The top-level folders, as chips for the scope.
+  // The folders, as chips for the scope that open into their subfolders.
   React.useEffect(() => {
     let live = true;
+    setAt('');
     backend.listTree(repo, branch).then(
-      ({ files }) => { if (live) setTopFolders([...new Set(files.filter(f => f.includes('/')).map(f => f.slice(0, f.indexOf('/'))))].sort()); },
+      ({ files }) => { if (live) setTree(folderTree(files)); },
       (e) => ignore(log, 'the folders for the scope chips could not be listed', e, 'debug'),
     );
     return () => { live = false; };
@@ -58,7 +73,9 @@ export function RepoSearch({ backend, repo, branch, onOpen, onBack }) {
 
   const changeScope = (key, value) => setScope(s => { const next = { ...s, [key]: value }; writeScope(repo, next); return next; });
   const folders = parseFolders(scope.folders);
-  const toggleFolder = (name) => changeScope('folders', (folders.includes(name) ? folders.filter(f => f !== name) : [...folders, name]).join(', '));
+  const toggleFolder = (path) => changeScope('folders', (folders.includes(path) ? folders.filter(f => f !== path) : [...folders, path]).join(', '));
+  const here = tree.get(at) ?? [];
+  const crumbs = at ? at.split('/') : [];
 
   const go = async () => {
     if (!query) return;
@@ -106,11 +123,42 @@ export function RepoSearch({ backend, repo, branch, onOpen, onBack }) {
           <button type="button" className="btn primary" onClick={go} disabled={busy || phase.name === 'asking'}>Search</button>
         </div>
         <div className="m-hint" style={{ marginBottom: 4 }}>Search only these folders and file types (empty means all).</div>
-        {topFolders.length > 0 && (
+        {crumbs.length > 0 && (
+          <nav className="m-crumbs" aria-label="Folder path" style={{ marginBottom: 2 }}>
+            <button type="button" onClick={() => setAt('')}>All folders</button>
+            {crumbs.map((name, i) => {
+              const path = crumbs.slice(0, i + 1).join('/');
+              return (
+                <React.Fragment key={path}>
+                  <span aria-hidden="true">/</span>
+                  {i < crumbs.length - 1
+                    ? <button type="button" onClick={() => setAt(path)}>{name}</button>
+                    : <span aria-current="location" style={{ color: 'var(--text)' }}>{name}</span>}
+                </React.Fragment>
+              );
+            })}
+          </nav>
+        )}
+        {(here.length > 0 || at) && (
           <div className="m-docs-chips" style={{ marginBottom: 6 }}>
-            {topFolders.map(f => (
-              <button key={f} type="button" className={`m-chip${folders.includes(f) ? ' active' : ''}`} aria-pressed={folders.includes(f)} onClick={() => toggleFolder(f)}>{f}</button>
-            ))}
+            {at && (
+              <button type="button" className={`m-chip${folders.includes(at) ? ' active' : ''}`} aria-pressed={folders.includes(at)} onClick={() => toggleFolder(at)}>All of {crumbs[crumbs.length - 1]}</button>
+            )}
+            {here.map(name => {
+              const path = at ? `${at}/${name}` : name;
+              const on = folders.includes(path);
+              return (
+                <span key={path} className="m-folder-chip">
+                  <button type="button" className={`m-chip${on ? ' active' : ''}`} aria-pressed={on} onClick={() => toggleFolder(path)}>{name}</button>
+                  {tree.has(path) && (
+                    <button type="button" className="m-chip" aria-label={`Open ${path}`} title={`Show the folders in ${name}`} onClick={() => setAt(path)}>
+                      <Icon name="chevron-right" size={14}/>
+                    </button>
+                  )}
+                </span>
+              );
+            })}
+            {at && !here.length && <span className="m-hint" style={{ alignSelf: 'center' }}>No subfolders</span>}
           </div>
         )}
         <div className="m-fld" style={{ marginBottom: 6 }}>
