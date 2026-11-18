@@ -8,6 +8,10 @@ import { useDocumentAutosave, relativeTime } from './document-store.js'
 import { DocumentsModal } from './documents-modal.jsx'
 import { pinToHome } from '../pin-shortcut.js'
 import { JsonNodeSheet } from '../json-tree-ui.jsx'
+import { useFind } from '../find/use-find.js'
+import { FindBar } from '../find/find-bar.jsx'
+import { useFindShortcut } from '../find/use-find-shortcut.js'
+import { useTextareaFind } from '../find/use-textarea-find.js'
 
 const log = rendererLog('editor', 'json')
 
@@ -227,6 +231,14 @@ export function JsonEditorView({ openNewest = false, openDocId = null }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  // Find in the raw JSON. Ctrl+F only works while that panel is showing; the visual editor keeps its own search box.
+  const find = useFind()
+  const rawPaneRef = useRef(null)
+  const rawRef = useRef(null)
+  useTextareaFind(rawRef, rawText, find)
+  useFindShortcut(rawPaneRef, find)
+  const closeFind = () => { find.close(); rawRef.current?.focus() }
+
   function onResizerMouseDown() {
     draggingRef.current = true
     document.body.style.cursor = 'col-resize'
@@ -328,7 +340,7 @@ export function JsonEditorView({ openNewest = false, openDocId = null }) {
 
       {/* Workspace */}
       <div ref={workspaceRef} className="doc-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <div style={{ ...leftStyle, display: panelHidden.left ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div ref={rawPaneRef} style={{ ...leftStyle, display: panelHidden.left ? 'none' : 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ height: 32, display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Raw JSON</span>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
@@ -336,8 +348,9 @@ export function JsonEditorView({ openNewest = false, openDocId = null }) {
               <button className="je-icon-btn" title="Hide panel" onClick={() => togglePanel('left')}><Icon name="chevron-left" size={13}/></button>
             </div>
           </div>
+          <FindBar find={{ ...find, close: closeFind }} />
           <textarea
-            value={rawText} onChange={onRawChange} spellCheck={false}
+            ref={rawRef} value={rawText} onChange={onRawChange} spellCheck={false}
             style={{ flex: 1, resize: 'none', border: 'none', outline: 'none', padding: '14px 18px', fontFamily: 'var(--mono)', fontSize: 12.5, lineHeight: 1.65, background: 'var(--surface)', color: 'var(--text)' }}
           />
           {rawError && (
