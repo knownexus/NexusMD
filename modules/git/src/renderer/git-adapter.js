@@ -36,6 +36,7 @@ export const gitAdapter = {
   preview(repo, worktreePath, registered, kind, options) { return api().preview(repo, worktreePath, registered, kind, options) },
   run(repo, worktreePath, registered, kind, options, stamp) { return api().run(repo, worktreePath, registered, kind, options, stamp) },
   files(repo, worktreePath, registered) { return api().files(repo, worktreePath, registered) },
+  grep(repo, worktreePath, registered, query, options) { return api().grep(repo, worktreePath, registered, query, options) },
   readFile(repo, worktreePath, registered, rel) { return api().readFile(repo, worktreePath, registered, rel) },
   writeFile(repo, worktreePath, registered, rel, text, options) { return api().writeFile(repo, worktreePath, registered, rel, text, options) },
   // Pop-out windows. spec = { kind: 'editor' | 'conflict' | 'diff', repo, worktree, path, registered, changeId? }.
