@@ -7,8 +7,8 @@ import { Icon } from './icons.jsx';
 import { FIND_BAR_STYLE } from './find-bar-style.js';
 import { toast } from './toast.jsx';
 import { Sheet } from './components.jsx';
-import { adoGet, getAdoConfig } from './ado-client.js';
-import { getGithubConfig, isGithubConfigured, createGithubHttpAdapter } from './github-client.js';
+import { adoGet, adoGetBinary, getAdoConfig } from './ado-client.js';
+import { getGithubConfig, isGithubConfigured, createGithubHttpAdapter, githubGetBinary } from './github-client.js';
 import { groupCommitsByDay } from './git-browser.js';
 import { makeGitBackend, providerName, sourcesOf, pickSource, sourceLabel } from './git-backend.js';
 import { getProfileKey } from './profile-keys.js';
@@ -31,7 +31,7 @@ export async function listRepoFolder(repo, path = '/') {
 }
 export const REPO_PICK = 'helm.dash.repo';
 const backend = makeGitBackend({
-  adoGet, getAdoProjects: () => getAdoConfig().projects || [],
+  adoGet, adoGetBinary, githubGetBinary, getAdoProjects: () => getAdoConfig().projects || [],
   githubHttp: createGithubHttpAdapter(), getGithubConfig, isGithubConfigured,
 });
 const RECENT_KEY = 'helm.git.recent';

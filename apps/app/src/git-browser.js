@@ -51,6 +51,20 @@ export async function listItems(get, repo, branch, path = '/') {
     .sort((a, b) => (b.isFolder - a.isFolder) || a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
+// Every file of a branch (repo-relative paths, no leading slash) and the branch's commit id.
+export async function listTree(get, repo, branch) {
+  const base = `${enc(repo.project)}/_apis/git/repositories/${repo.id}`;
+  const [items, refs] = await Promise.all([
+    get(`${base}/items?scopePath=/&recursionLevel=Full&${at(branch)}&api-version=7.0`),
+    get(`${base}/refs?filter=${enc('heads/' + branch)}&api-version=7.0`),
+  ]);
+  const ref = (refs?.value || []).find(r => r.name === `refs/heads/${branch}`);
+  return { files: (items?.value || []).filter(i => !i.isFolder).map(i => String(i.path).replace(/^\/+/, '')), commit: ref?.objectId || '' };
+}
+
+// The branch as a zip.
+export const zipPath = (repo, branch) => `${enc(repo.project)}/_apis/git/repositories/${repo.id}/items?path=/&$format=zip&download=true&${at(branch)}&api-version=7.0`;
+
 // Text content of one file.
 export async function getFile(get, repo, branch, path) {
   const r = await get(`${enc(repo.project)}/_apis/git/repositories/${repo.id}/items?path=${enc(path)}&includeContent=true&${at(branch)}&api-version=7.0`);

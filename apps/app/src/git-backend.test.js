@@ -89,3 +89,56 @@ describe('repo sources', () => {
     expect(sourceLabel('ado')).toBe('Azure DevOps')
   })
 })
+
+describe('git backend: listing and downloading a whole branch', () => {
+  const zipOf = async (files) => {
+    const z = new (await import('jszip')).default()
+    for (const [n, c] of Object.entries(files)) z.file(n, c)
+    return z.generateAsync({ type: 'uint8array' })
+  }
+
+  it('lists a GitHub branch tree with its commit id', async () => {
+    const b = make({ githubHttp: fakeGithub({
+      'repos/acme/web/commits/main': { sha: 'c0ffee' },
+      'repos/acme/web/git/trees/c0ffee': { sha: 't', truncated: false, tree: [{ path: 'src', type: 'tree' }, { path: 'src/a.js', type: 'blob' }, { path: 'README.md', type: 'blob' }] },
+    }) })
+    expect(await b.listTree({ provider: 'github', fullName: 'acme/web' }, 'main')).toEqual({ files: ['src/a.js', 'README.md'], commit: 'c0ffee' })
+  })
+  it('says so when GitHub cuts the tree short', async () => {
+    const b = make({ githubHttp: fakeGithub({
+      'repos/acme/web/commits/main': { sha: 'c0ffee' },
+      'repos/acme/web/git/trees/c0ffee': { sha: 't', truncated: true, tree: [] },
+    }) })
+    await expect(b.listTree({ provider: 'github', fullName: 'acme/web' }, 'main')).rejects.toThrow(/too large to list/)
+  })
+  it('lists an Azure DevOps branch tree with its commit id', async () => {
+    const adoGet = vi.fn(async (p) => (p.includes('/refs?')
+      ? { value: [{ name: 'refs/heads/main', objectId: 'abc123' }] }
+      : { value: [{ path: '/', isFolder: true }, { path: '/src', isFolder: true }, { path: '/src/a.cs', isFolder: false }] }))
+    const r = await make({ adoGet }).listTree({ id: 'r1', project: 'P' }, 'main')
+    expect(r).toEqual({ files: ['src/a.cs'], commit: 'abc123' })
+    expect(adoGet.mock.calls.some(([p]) => p.includes('recursionLevel=Full'))).toBe(true)
+  })
+  it('downloads a GitHub branch zip and unpacks it without its top folder', async () => {
+    const bytes = await zipOf({ 'web-abc/src/a.js': 'a', 'web-abc/img.png': new Uint8Array([0, 1]) })
+    const githubGetBinary = vi.fn(async () => ({ bytes }))
+    const b = make({ githubGetBinary, githubHttp: fakeGithub({ 'repos/acme/web': { size: 10 } }) })
+    const files = await b.downloadZip({ provider: 'github', fullName: 'acme/web' }, 'feature/x', {})
+    expect(githubGetBinary.mock.calls[0][0]).toBe('repos/acme/web/zipball/feature%2Fx')
+    expect(files).toEqual([{ path: 'src/a.js', text: 'a' }])
+  })
+  it('downloads an Azure DevOps branch zip as it is', async () => {
+    const bytes = await zipOf({ 'src/a.cs': 'a' })
+    const adoGetBinary = vi.fn(async () => ({ bytes }))
+    const files = await make({ adoGetBinary }).downloadZip({ id: 'r1', project: 'P Q' }, 'main', {})
+    expect(adoGetBinary.mock.calls[0][0]).toContain('P%20Q/_apis/git/repositories/r1/items')
+    expect(adoGetBinary.mock.calls[0][0]).toContain('$format=zip')
+    expect(files).toEqual([{ path: 'src/a.cs', text: 'a' }])
+  })
+  it('refuses a GitHub repository that reports a size over the limit before downloading it', async () => {
+    const githubGetBinary = vi.fn()
+    const b = make({ githubGetBinary, githubHttp: fakeGithub({ 'repos/acme/web': { size: 400 * 1024 } }) })
+    await expect(b.downloadZip({ provider: 'github', fullName: 'acme/web' }, 'main', {})).rejects.toThrow(/too large to search on the phone/)
+    expect(githubGetBinary).not.toHaveBeenCalled()
+  })
+})
