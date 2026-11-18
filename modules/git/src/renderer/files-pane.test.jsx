@@ -56,6 +56,22 @@ describe('FilesPane', () => {
     expect(grep).toHaveBeenCalledWith(repo, repo.path, registered, 'two', { matchCase: false, folders: [], extensions: [] })
   })
 
+  it('does not carry one worktree\'s search into another worktree', async () => {
+    const adapter = {
+      files: vi.fn(async () => ({ files, truncated: false })), readFile: vi.fn(async () => ({ text: 'x' })),
+      grep: vi.fn(async () => ({ results: [{ path: 'src/app.jsx', matches: [{ line: 1, text: 'two', start: 0, end: 3 }] }], capped: false })),
+    }
+    const pane = wt => <div className="nx-gw-files-body"><FilesPane adapter={adapter} repo={repo} worktreePath={wt} registered={registered} version={1} /></div>
+    const { rerender } = render(pane(repo.path))
+    fireEvent.click(await screen.findByRole('button', { name: /search in files/i }))
+    fireEvent.change(screen.getByLabelText('Search text'), { target: { value: 'two' } })
+    fireEvent.keyDown(screen.getByLabelText('Search text'), { key: 'Enter' })
+    await screen.findByText('src/app.jsx', { selector: '.nx-gw-search-file' })
+    rerender(pane('C:/repos/A-feature'))
+    await waitFor(() => expect(screen.queryByText('src/app.jsx', { selector: '.nx-gw-search-file' })).toBeNull())
+    expect(screen.queryByLabelText('Search text')).toBeNull()
+  })
+
   it('copies files dropped on a folder into it, then refreshes', async () => {
     const { adapter, onImported } = setup()
     dropOn(await row('docs'), ['logo.png'])

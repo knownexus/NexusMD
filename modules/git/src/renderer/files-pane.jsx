@@ -199,6 +199,9 @@ export function FilesPane({ adapter, host = null, repo, worktreePath, registered
   const [busy, setBusy] = React.useState(false)
   // A search result that was opened: the file, the line to show and the term for the find bar.
   const [jump, setJump] = React.useState(null)
+  const worktreeKey = `${repo?.path}|${worktreePath}`
+  // Another worktree: the earlier one's search result is not this one's.
+  React.useEffect(() => { setJump(null) }, [worktreeKey])
   // Only the worktree's identity (and a new snapshot) lists the files again; the parent passes fresh-but-equal objects.
   const deps = React.useRef({ adapter, repo, registered })
   deps.current = { adapter, repo, registered }
@@ -322,7 +325,7 @@ export function FilesPane({ adapter, host = null, repo, worktreePath, registered
           <>
             <ChangedPin marks={marks} picked={picked} pick={pick} />
             <RecentPin recent={recent.recent} picked={picked} pick={pick} />
-            <RepoSearchPanel adapter={adapter} repo={repo} worktreePath={worktreePath} registered={registered}
+            <RepoSearchPanel key={viewKey} adapter={adapter} repo={repo} worktreePath={worktreePath} registered={registered}
               onOpen={(path, line, query) => { setView('file'); setJump({ path, line: { line }, query, token: Date.now() }); pick(path) }} />
           </>
         )} footer={marks.files.size > 0 && <Legend marks={marks} />}

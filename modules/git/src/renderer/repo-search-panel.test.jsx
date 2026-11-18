@@ -99,4 +99,11 @@ describe('RepoSearchPanel', () => {
     fireEvent.keyDown(screen.getByLabelText('Search text'), { key: 'Enter' })
     expect(grep).not.toHaveBeenCalled()
   })
+  it('reads a Windows folder path with backslashes as a folder path', async () => {
+    const { grep } = mount()
+    fireEvent.change(screen.getByLabelText('Folders'), { target: { value: ['src', 'lib'].join(String.fromCharCode(92)) } })
+    search('foo')
+    await screen.findByText('src/a.cs')
+    expect(grep.mock.calls[0][4].folders).toEqual(['src/lib'])
+  })
 })

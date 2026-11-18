@@ -1,5 +1,6 @@
 import React from 'react'
 import { CodeEditor, languageForPath } from '@nexusmd/editor-kit/code-editor.jsx'
+import { findMatches } from '@nexusmd/core'
 import { useFind, FindBar, useFindShortcut, useDomFind } from '@nexusmd/ui'
 import { ipcMessage } from './use-git-actions.js'
 import { fileStats, formatSize } from './file-stats.js'
@@ -47,11 +48,21 @@ export function TextPreview({ path, load, loadKey, extra = null, markedLines = n
     findReport(api.find(findText, { matchCase: findCase, index: findIndex }))
   }, [codeActive, path, state.text, findOpen, findText, findCase, findIndex, findReport])
   // A search result opens the file with its term already in the bar (findToken changes for each click).
+  // The match on the clicked line is the current one, so the view stays on that line instead of going to the file's first match.
+  const lineNo = typeof line === 'object' && line ? line.line : line
+  const goToMatch = find.goTo
   React.useEffect(() => {
     if (!findQuery || !ready) return
     setFindText(findQuery)
     openFind(true)
-  }, [findQuery, findToken, ready, setFindText, openFind])
+    if (typeof lineNo === 'number' && state.text != null) {
+      const rows = state.text.split('\n')
+      let offset = 0
+      for (let i = 0; i < Math.min(lineNo - 1, rows.length); i++) offset += rows[i].length + 1
+      const at = findMatches(state.text, findQuery, { matchCase: false }).findIndex(m => m.start >= offset)
+      if (at >= 0) goToMatch(at)
+    }
+  }, [findQuery, findToken, ready, setFindText, openFind, goToMatch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state.status === 'loading') return <div className="nx-gw-fx-note nx-gw-fx-pad">Loading…</div>
   if (state.status === 'error') return <div role="alert" className="nx-alert bad nx-gw-fx-pad">{state.error}</div>

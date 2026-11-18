@@ -105,6 +105,17 @@ describe('git:grep against a real repository', () => {
     expect(r.results.length).toBeLessThan(8)
     for (const f of r.results) for (const m of f.matches) expect(m.text.length).toBeLessThanOrEqual(300)
   })
+  it('is not thrown off by the user having grep.column on', async () => {
+    run(repo.path, 'config', 'grep.column', 'true')
+    const hit = (await grep('foo bar')).results.find(x => x.path === 'src/a.cs').matches[0]
+    expect(hit.text).toBe('foo bar')
+    expect(hit.text.slice(hit.start, hit.end)).toBe('foo bar')
+  })
+  it('matches file types whatever their case', async () => {
+    fs.writeFileSync(disk('src/Upper.CS'), 'foo upper
+')
+    expect(paths(await grep('foo', { extensions: ['cs'] }))).toContain('src/Upper.CS')
+  })
   it('cuts a very long line to a short snippet that still holds the match', async () => {
     const m = (await grep('foo', { folders: ['src'], extensions: ['js'] })).results[0].matches[0]
     expect(m.text.length).toBeLessThanOrEqual(300)

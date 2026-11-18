@@ -9,7 +9,7 @@ const readScope = repo => {
   try { return { folders: '', extensions: '', ...JSON.parse(localStorage.getItem(scopeKey(repo)) || '{}') } } catch (e) { ignore(log, 'the saved search scope could not be read, so the default is used', e, 'debug'); return { folders: '', extensions: '' } }
 }
 const writeScope = (repo, scope) => { try { localStorage.setItem(scopeKey(repo), JSON.stringify(scope)) } catch (e) { ignore(log, 'the search scope could not be saved', e, 'debug') } }
-const parseFolders = text => [...new Set(String(text).split(/[\n,]+/).map(f => f.trim()).filter(Boolean))]
+const parseFolders = text => [...new Set(String(text).split(/[\n,]+/).map(f => f.trim().split(String.fromCharCode(92)).join('/')).filter(Boolean))]
 
 // The text of a result row with the match marked.
 function Snippet({ match }) {

@@ -21,6 +21,8 @@ export function githubReposFromConfig(config) {
 }
 
 const noLead = (p) => String(p || '').replace(/^\/+/, '');
+// A ref is a branch name, or { commit } to read at exactly that commit; GitHub takes either as a plain string.
+const refName = (ref) => (ref && typeof ref === 'object' ? ref.commit : ref);
 
 // adoGetBinary(path, { signal }) / githubGetBinary(path, { signal }) → { bytes, declaredSize } fetch a branch zip.
 export function makeGitBackend({ adoGet, getAdoProjects, githubHttp, getGithubConfig, isGithubConfigured, adoGetBinary, githubGetBinary }) {
@@ -53,7 +55,7 @@ export function makeGitBackend({ adoGet, getAdoProjects, githubHttp, getGithubCo
 
     async listItems(repo, branch, path = '/') {
       if (!isGithubRepo(repo)) return listAdoItems(adoGet, repo, branch, path);
-      return (await listGithubContents(gh(), repo.fullName, { path: noLead(path), ref: branch })).map(i => ({
+      return (await listGithubContents(gh(), repo.fullName, { path: noLead(path), ref: refName(branch) })).map(i => ({
         path: '/' + i.path, name: i.name, isFolder: i.type === 'dir',
       }));
     },
@@ -77,13 +79,13 @@ export function makeGitBackend({ adoGet, getAdoProjects, githubHttp, getGithubCo
       const info = await gh().get(`repos/${repo.fullName}`);
       const kb = info?.size || 0;
       if (kb * 1024 > ZIP_LIMIT * 3) throw new Error(`This repository is too large to search on the phone (${Math.round(kb / 1024)} MB).`);
-      const { bytes, declaredSize } = await githubGetBinary(`repos/${repo.fullName}/zipball/${encodeURIComponent(branch)}`, { signal });
+      const { bytes, declaredSize } = await githubGetBinary(`repos/${repo.fullName}/zipball/${encodeURIComponent(refName(branch))}`, { signal });
       return unpackBranchZip(bytes, { declaredSize, include, stripTop: true });
     },
 
     async getFile(repo, branch, path) {
       if (!isGithubRepo(repo)) return getAdoFile(adoGet, repo, branch, path);
-      const f = await getGithubFile(gh(), repo.fullName, { path: noLead(path), ref: branch });
+      const f = await getGithubFile(gh(), repo.fullName, { path: noLead(path), ref: refName(branch) });
       if (f.text == null) throw new Error(f.reason === 'too-large' ? 'That file is too large to show here.' : 'Only text files can be shown here.');
       return f.text;
     },

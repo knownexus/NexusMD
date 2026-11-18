@@ -142,3 +142,39 @@ describe('git backend: listing and downloading a whole branch', () => {
     expect(githubGetBinary).not.toHaveBeenCalled()
   })
 })
+
+describe('git backend: reading at a commit', () => {
+  const zipOf = async (files) => {
+    const z = new (await import('jszip')).default()
+    for (const [n, c] of Object.entries(files)) z.file(n, c)
+    return z.generateAsync({ type: 'uint8array' })
+  }
+  it('reads a GitHub file and downloads a zip at the commit, not the branch name', async () => {
+    const github = fakeGithub({ 'repos/acme/web/contents/a.js': { content: btoa('x'), size: 1, html_url: 'u' }, 'repos/acme/web': { size: 10 } })
+    const githubGetBinary = vi.fn(async () => ({ bytes: await zipOf({ 'web-1/a.js': 'a' }) }))
+    const b = make({ githubHttp: github, githubGetBinary })
+    await b.getFile({ provider: 'github', fullName: 'acme/web' }, { commit: 'c0ffee' }, '/a.js')
+    expect(github.fetch.mock.calls.some(([p]) => p.includes('contents/a.js?ref=c0ffee'))).toBe(true)
+    await b.downloadZip({ provider: 'github', fullName: 'acme/web' }, { commit: 'c0ffee' }, {})
+    expect(githubGetBinary.mock.calls[0][0]).toBe('repos/acme/web/zipball/c0ffee')
+  })
+  it('reads an Azure DevOps file and zip at the commit', async () => {
+    const adoGet = vi.fn(async () => 'text')
+    const adoGetBinary = vi.fn(async () => ({ bytes: await zipOf({ 'a.cs': 'a' }) }))
+    const b = make({ adoGet, adoGetBinary })
+    await b.getFile({ id: 'r1', project: 'P' }, { commit: 'abc123' }, '/a.cs')
+    expect(adoGet.mock.calls[0][0]).toContain('versionDescriptor.versionType=commit')
+    expect(adoGet.mock.calls[0][0]).toContain('versionDescriptor.version=abc123')
+    await b.downloadZip({ id: 'r1', project: 'P' }, { commit: 'abc123' }, {})
+    expect(adoGetBinary.mock.calls[0][0]).toContain('versionDescriptor.versionType=commit')
+  })
+  it('lists an Azure DevOps tree at the commit it resolved first', async () => {
+    const calls = []
+    const adoGet = vi.fn(async (p) => { calls.push(p); return p.includes('/refs?') ? { value: [{ name: 'refs/heads/main', objectId: 'abc123' }] } : { value: [{ path: '/a.cs', isFolder: false }] } })
+    const r = await make({ adoGet }).listTree({ id: 'r1', project: 'P' }, 'main')
+    expect(r.commit).toBe('abc123')
+    expect(calls[0]).toContain('/refs?')
+    expect(calls[1]).toContain('versionDescriptor.versionType=commit')
+    expect(calls[1]).toContain('versionDescriptor.version=abc123')
+  })
+})

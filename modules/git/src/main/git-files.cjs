@@ -136,8 +136,8 @@ function grepPathspecs(folders, extensions) {
   const exts = (extensions || []).map(e => String(e).replace(/^\.+/, '')).filter(Boolean);
   if (!dirs.length && !exts.length) return [];
   if (!exts.length) return dirs.map(d => `:(top,literal)${d}/`);
-  if (!dirs.length) return exts.map(e => `:(top,glob)**/*.${escapeGlob(e)}`);
-  return dirs.flatMap(d => exts.map(e => `:(top,glob)${escapeGlob(d)}/**/*.${escapeGlob(e)}`));
+  if (!dirs.length) return exts.map(e => `:(top,glob,icase)**/*.${escapeGlob(e)}`);
+  return dirs.flatMap(d => exts.map(e => `:(top,glob,icase)${escapeGlob(d)}/**/*.${escapeGlob(e)}`));
 }
 
 function registerFiles(handle, { git, requireExactWorktree, requirePaths, withRepoLock, reveal = defaultReveal, openExternal = defaultOpenExternal }) {
@@ -160,7 +160,7 @@ function registerFiles(handle, { git, requireExactWorktree, requirePaths, withRe
     await requireExactWorktree(repo, wt, registered);
     const { matchCase = false, folders = [], extensions = [] } = options || {};
     if (typeof query !== 'string' || !query) return { results: [], capped: false };
-    const args = ['grep', '-z', '-n', '-I', '-F', '--no-color', '--untracked', '--exclude-standard', '-m', String(GREP_CAPS.perFile + 1)];
+    const args = ['grep', '-z', '-n', '-I', '-F', '--no-color', '--no-column', '--untracked', '--exclude-standard', '-m', String(GREP_CAPS.perFile + 1)];
     if (!matchCase) args.push('-i');
     args.push('-e', query, '--', ...grepPathspecs(folders, extensions));
     // literal: false because the pathspecs use :(top,literal) and :(glob) magic; each is built from escaped text above.
