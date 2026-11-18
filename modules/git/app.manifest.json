@@ -55,6 +55,7 @@
         "run": { "invoke": "git:run" },
         "exec": { "invoke": "git:exec" },
         "files": { "invoke": "git:files" },
+        "grep": { "invoke": "git:grep" },
         "readFile": { "invoke": "git:readFile" },
         "writeFile": { "invoke": "git:writeFile" },
         "readImage": { "invoke": "git:readImage" },

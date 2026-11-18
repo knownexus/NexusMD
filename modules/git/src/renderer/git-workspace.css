@@ -728,3 +728,23 @@
 .nx-gw-pin-list[data-open] { max-height: 240px; overflow: auto; }
 .nx-gw-pin-more { margin: 2px 6px 4px; padding: 0; border: 0; background: none; color: var(--accent); font-size: 11.5px; cursor: pointer; }
 .nx-gw-pin-more:hover { text-decoration: underline; }
+
+/* Search in files (the Files tab): a collapsible panel above the tree. */
+.nx-gw-search { border-bottom: 1px solid var(--border); }
+.nx-gw-search-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 8px; border: 0; background: none; color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.nx-gw-search-head:hover { color: var(--text); }
+.nx-gw-search-body { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+.nx-gw-search-row { display: flex; gap: 4px; }
+.nx-gw-search-row input { flex: 1; min-width: 0; height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; }
+.nx-gw-search-row button { height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.nx-gw-search-row button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.nx-gw-search-scope { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px; color: var(--text-muted); }
+.nx-gw-search-scope label { display: flex; flex-direction: column; gap: 2px; }
+.nx-gw-search-scope input { height: 24px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; font-size: 12px; }
+.nx-gw-search-results { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.nx-gw-search-file { position: sticky; top: 0; padding: 3px 8px; background: var(--surface-2); color: var(--text-muted); font-size: 11px; font-weight: 600; }
+.nx-gw-search-hit { display: flex; gap: 8px; width: 100%; padding: 2px 8px; border: 0; background: none; color: var(--text); font: inherit; font-family: var(--mono); font-size: 11.5px; text-align: left; cursor: pointer; }
+.nx-gw-search-hit:hover { background: var(--surface-2); }
+.nx-gw-search-line { flex: none; min-width: 32px; text-align: right; color: var(--text-subtle); }
+.nx-gw-search-text { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.nx-gw-search-text mark { background: rgba(255, 200, 0, .45); color: inherit; border-radius: 2px; }

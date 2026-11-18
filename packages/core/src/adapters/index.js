@@ -226,6 +226,9 @@ export const IGitAdapter = {
   run:           async (repo, worktreePath, registered, kind, options, stamp) => Promise.reject(new Error('IGitAdapter.run not implemented')),
   // File editor. → { files: [rel], truncated }
   files:         async (repo, worktreePath, registered) => Promise.reject(new Error('IGitAdapter.files not implemented')),
+  // Searches the lines of the tracked and untracked (not ignored) text files as plain text. options = { matchCase, folders, extensions }
+  // → { results: [{ path, matches: [{ line, text, start, end }] }], capped }  (one match per matching line; capped at 200 files / 50 per file / 1000)
+  grep:          async (repo, worktreePath, registered, query, options) => Promise.reject(new Error('IGitAdapter.grep not implemented')),
   // → { text, bom, stamp } | { missing: true }; rejects for binary or over-1 MB files
   readFile:      async (repo, worktreePath, registered, rel) => Promise.reject(new Error('IGitAdapter.readFile not implemented')),
   // options = { expectedStamp, overwrite, bom } → { ok: true, stamp } | { ok: false, conflict: true, stamp } | { ok: false, missing: true }

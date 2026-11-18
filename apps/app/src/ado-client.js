@@ -3,7 +3,7 @@
 import { CapacitorHttp } from '@capacitor/core';
 import { makeAdoConfig } from '@nexusmd/core';
 import { getProfileKey } from './profile-keys.js';
-import { nativeHttp } from './native-http.js';
+import { nativeHttp, nativeBinary } from './native-http.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 // Read/write logic lives in @nexusmd/core; the app keeps its `helm.android.*` key
@@ -65,6 +65,13 @@ async function adoRequest(method, path, body) {
   }
 }
 
+// A GET whose answer is bytes (a branch zip): { bytes, declaredSize }.
+async function adoGetBinary(path) {
+  const { org, pat } = getAdoConfig();
+  if (!org) throw new Error('ADO org not configured — open Settings first.');
+  return nativeBinary({ url: `https://dev.azure.com/${encodeURIComponent(org)}/${path}`, headers: { Authorization: authHeader(pat), Accept: 'application/zip' } });
+}
+
 const adoGet   = (path)       => adoRequest('GET',   path, undefined);
 const adoPost  = (path, body) => adoRequest('POST',  path, body);
 const adoPatch = (path, body) => adoRequest('PATCH', path, body);
@@ -109,4 +116,4 @@ export function createAdoHttpAdapter() {
   }
 }
 
-export { adoGet, adoPost, adoPatch, adoPut, getAdoConfig, saveAdoConfig, removeAdoConfig, isAdoConfigured, usesAdoWorkItems };
+export { adoGet, adoGetBinary, adoPost, adoPatch, adoPut, getAdoConfig, saveAdoConfig, removeAdoConfig, isAdoConfigured, usesAdoWorkItems };

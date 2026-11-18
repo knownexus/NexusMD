@@ -43,6 +43,35 @@ describe('FilesPane', () => {
     expect(screen.getByText('guide.md')).toBeTruthy()
   })
 
+  it('opens a search result in the preview with its term in the find bar', async () => {
+    const grep = vi.fn(async () => ({ results: [{ path: 'src/app.jsx', matches: [{ line: 2, text: 'two', start: 0, end: 3 }] }], capped: false }))
+    const { adapter } = setup({ extra: {} })
+    adapter.grep = grep
+    fireEvent.click(await screen.findByRole('button', { name: /search in files/i }))
+    fireEvent.change(screen.getByLabelText('Search text'), { target: { value: 'two' } })
+    fireEvent.keyDown(screen.getByLabelText('Search text'), { key: 'Enter' })
+    fireEvent.click((await screen.findByText('src/app.jsx')).closest('[role="group"]').querySelector('button'))
+    await waitFor(() => expect(adapter.readFile).toHaveBeenCalledWith(repo, repo.path, registered, 'src/app.jsx'))
+    await waitFor(() => expect(screen.getByLabelText('Find in file').value).toBe('two'))
+    expect(grep).toHaveBeenCalledWith(repo, repo.path, registered, 'two', { matchCase: false, folders: [], extensions: [] })
+  })
+
+  it('does not carry one worktree\'s search into another worktree', async () => {
+    const adapter = {
+      files: vi.fn(async () => ({ files, truncated: false })), readFile: vi.fn(async () => ({ text: 'x' })),
+      grep: vi.fn(async () => ({ results: [{ path: 'src/app.jsx', matches: [{ line: 1, text: 'two', start: 0, end: 3 }] }], capped: false })),
+    }
+    const pane = wt => <div className="nx-gw-files-body"><FilesPane adapter={adapter} repo={repo} worktreePath={wt} registered={registered} version={1} /></div>
+    const { rerender } = render(pane(repo.path))
+    fireEvent.click(await screen.findByRole('button', { name: /search in files/i }))
+    fireEvent.change(screen.getByLabelText('Search text'), { target: { value: 'two' } })
+    fireEvent.keyDown(screen.getByLabelText('Search text'), { key: 'Enter' })
+    await screen.findByText('src/app.jsx', { selector: '.nx-gw-search-file' })
+    rerender(pane('C:/repos/A-feature'))
+    await waitFor(() => expect(screen.queryByText('src/app.jsx', { selector: '.nx-gw-search-file' })).toBeNull())
+    expect(screen.queryByLabelText('Search text')).toBeNull()
+  })
+
   it('copies files dropped on a folder into it, then refreshes', async () => {
     const { adapter, onImported } = setup()
     dropOn(await row('docs'), ['logo.png'])

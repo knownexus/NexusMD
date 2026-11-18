@@ -40,7 +40,10 @@ export async function listCommits(get, repo, branch, top = 50) {
   }));
 }
 
-const at = (branch) => `versionDescriptor.version=${enc(branch)}&versionDescriptor.versionType=branch`;
+// A branch name, or { commit } to read at exactly that commit.
+const at = (ref) => (ref && typeof ref === 'object'
+  ? `versionDescriptor.version=${enc(ref.commit)}&versionDescriptor.versionType=commit`
+  : `versionDescriptor.version=${enc(ref)}&versionDescriptor.versionType=branch`);
 
 // One folder level, folders first. `path` is '/' for the root.
 export async function listItems(get, repo, branch, path = '/') {
@@ -50,6 +53,19 @@ export async function listItems(get, repo, branch, path = '/') {
     .map(i => ({ path: i.path, name: i.path.split('/').pop(), isFolder: !!i.isFolder }))
     .sort((a, b) => (b.isFolder - a.isFolder) || a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
+
+// Every file of a branch (repo-relative paths, no leading slash) and the branch's commit id.
+export async function listTree(get, repo, branch) {
+  const base = `${enc(repo.project)}/_apis/git/repositories/${repo.id}`;
+  // The branch is resolved to its commit first, and the tree is listed at that commit, so the two always agree.
+  const refs = await get(`${base}/refs?filter=${enc('heads/' + branch)}&api-version=7.0`);
+  const commit = (refs?.value || []).find(r => r.name === `refs/heads/${branch}`)?.objectId || '';
+  const items = await get(`${base}/items?scopePath=/&recursionLevel=Full&${at(commit ? { commit } : branch)}&api-version=7.0`);
+  return { files: (items?.value || []).filter(i => !i.isFolder).map(i => String(i.path).replace(/^\/+/, '')), commit };
+}
+
+// The branch as a zip.
+export const zipPath = (repo, branch) => `${enc(repo.project)}/_apis/git/repositories/${repo.id}/items?path=/&$format=zip&download=true&${at(branch)}&api-version=7.0`;
 
 // Text content of one file.
 export async function getFile(get, repo, branch, path) {

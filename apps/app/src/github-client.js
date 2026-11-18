@@ -2,7 +2,7 @@
 // native HTTP, and the GitHub half of the routed workItemSource. Logic lives in @nexusmd/core.
 import { makeGithubConfig, makeGithubWorkItemSource } from '@nexusmd/core';
 import { getProfileKey } from './profile-keys.js';
-import { nativeHttp } from './native-http.js';
+import { nativeHttp, nativeBinary } from './native-http.js';
 
 const rawStorage = {
   get: (k) => localStorage.getItem(k),
@@ -51,6 +51,16 @@ export function createGithubHttpAdapter({
       };
     },
   };
+}
+
+// A GET whose answer is bytes (a branch zipball): { bytes, declaredSize }. GitHub redirects it to its download host.
+export async function githubGetBinary(path, { getConfig = getGithubConfig } = {}) {
+  const { pat } = getConfig();
+  if (!pat) throw new Error('GitHub token not configured — open Settings first.');
+  return nativeBinary({
+    url: `https://api.github.com/${path}`,
+    headers: { Authorization: 'Bearer ' + pat, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+  });
 }
 
 export const androidGithubSource = makeGithubWorkItemSource({

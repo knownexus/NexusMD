@@ -101,6 +101,45 @@ async function looksLikeText(file) {
   } finally { await handle.close(); }
 }
 
+// ── Searching the lines of the files ─────────────────────────────────────────────────────────────
+// Kept in step with SEARCH_CAPS / cutLine in @nexusmd/core (main cannot import that ES module).
+const GREP_CAPS = { files: 200, perFile: 50, total: 1000 };
+const SNIPPET = 300;
+const GREP_MAX_BYTES = 8 * 1024 * 1024;
+const escapeGlob = s => s.replace(/[\\*?[\]]/g, '\\$&');
+const escapeRegExp = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The first occurrence of `query` in `line` as { start, end }, or null; literal, and case-insensitive unless matchCase.
+function firstMatch(line, query, matchCase) {
+  const hay = matchCase ? line : line.toLowerCase();
+  if (hay.length === line.length) {
+    const needle = matchCase ? query : query.toLowerCase();
+    const i = needle ? hay.indexOf(needle) : -1;
+    return i < 0 ? null : { start: i, end: i + needle.length };
+  }
+  // Lower-casing moved the offsets (e.g. İ): match on the original line.
+  const m = new RegExp(escapeRegExp(query), matchCase ? 'u' : 'iu').exec(line);
+  return m ? { start: m.index, end: m.index + m[0].length } : null;
+}
+
+function cutLine(line, start, end) {
+  if (line.length <= SNIPPET) return { text: line, start, end };
+  const from = Math.max(0, Math.min(start - 100, line.length - SNIPPET));
+  const text = line.slice(from, from + SNIPPET);
+  return { text, start: start - from, end: Math.min(end - from, text.length) };
+}
+
+// Pathspecs for a scope. Every one is literal text or an escaped glob, from the top of the worktree; git ORs a list
+// of them, so a folder and an extension together are written as one folder-and-extension pathspec each.
+function grepPathspecs(folders, extensions) {
+  const dirs = (folders || []).map(f => String(f).replace(/^\/+|\/+$/g, '')).filter(Boolean);
+  const exts = (extensions || []).map(e => String(e).replace(/^\.+/, '')).filter(Boolean);
+  if (!dirs.length && !exts.length) return [];
+  if (!exts.length) return dirs.map(d => `:(top,literal)${d}/`);
+  if (!dirs.length) return exts.map(e => `:(top,glob,icase)**/*.${escapeGlob(e)}`);
+  return dirs.flatMap(d => exts.map(e => `:(top,glob,icase)${escapeGlob(d)}/**/*.${escapeGlob(e)}`));
+}
+
 function registerFiles(handle, { git, requireExactWorktree, requirePaths, withRepoLock, reveal = defaultReveal, openExternal = defaultOpenExternal }) {
   const target = (repo, wt, registered, rel) =>
     requireExactWorktree(repo, wt, registered, () => requirePaths(wt, [rel])).then(() => requireWorktreeFile(wt, rel));
@@ -112,6 +151,50 @@ function registerFiles(handle, { git, requireExactWorktree, requirePaths, withRe
     // A nested repository lists as "dir/", which isn't a file.
     const all = [...new Set(r.stdout.split('\0').filter(p => p && !p.endsWith('/')))].sort();
     return { files: all.slice(0, MAX_LIST), truncated: all.length > MAX_LIST };
+  });
+
+  // Searches the lines of the worktree's tracked and untracked (not ignored) text files for `query`, as plain text.
+  // → { results: [{ path, matches: [{ line, text, start, end }] }], capped }, one match per matching line (the first
+  // occurrence), with the caps in GREP_CAPS. The query follows -e and the pathspecs follow --, so neither is an option.
+  handle('git:grep', async (_e, repo, wt, registered, query, options) => {
+    await requireExactWorktree(repo, wt, registered);
+    const { matchCase = false, folders = [], extensions = [] } = options || {};
+    if (typeof query !== 'string' || !query) return { results: [], capped: false };
+    const args = ['grep', '-z', '-n', '-I', '-F', '--no-color', '--no-column', '--untracked', '--exclude-standard', '-m', String(GREP_CAPS.perFile + 1)];
+    if (!matchCase) args.push('-i');
+    args.push('-e', query, '--', ...grepPathspecs(folders, extensions));
+    // literal: false because the pathspecs use :(top,literal) and :(glob) magic; each is built from escaped text above.
+    // maxBytes stops git when a search matches a huge amount, so the output never has to be held whole.
+    const r = await git(wt, args, { literal: false, maxBytes: GREP_MAX_BYTES });
+    if (r.code === 1) return { results: [], capped: false };
+    if (r.code !== 0) throw new Error(r.stderr || 'git grep failed');
+    const results = [];
+    let total = 0;
+    let capped = !!r.truncated;
+    let current = null;
+    const records = r.stdout.split('\n');
+    if (r.truncated) records.pop(); // the last record was cut off
+    for (const record of records) {
+      if (!record) continue;
+      // With -z a record is  path NUL line NUL text
+      const nul = record.indexOf('\0');
+      const nul2 = nul < 0 ? -1 : record.indexOf('\0', nul + 1);
+      if (nul2 < 0) continue;
+      const file = record.slice(0, nul);
+      const line = Number(record.slice(nul + 1, nul2));
+      const text = record.slice(nul2 + 1).replace(/\r$/, '');
+      if (!current || current.path !== file) {
+        if (results.length >= GREP_CAPS.files) { capped = true; break; }
+        current = { path: file, matches: [] };
+        results.push(current);
+      }
+      if (current.matches.length >= GREP_CAPS.perFile || total >= GREP_CAPS.total) { capped = true; continue; }
+      const m = firstMatch(text, query, matchCase);
+      if (!m) continue;
+      current.matches.push({ line, ...cutLine(text, m.start, m.end) });
+      total++;
+    }
+    return { results: results.filter(x => x.matches.length), capped };
   });
 
   // Shows a file or folder of the worktree, selected, in the OS file manager; '' opens the worktree itself.

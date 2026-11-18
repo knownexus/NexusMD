@@ -1,0 +1,57 @@
+# Search the lines of a repo's files
+
+## Intent
+Find a specific line or statement in a repo: type a term, see which files contain it and on which lines, tap a result to open that file at that line. Only the branch currently being viewed is searched. Builds on find-in-file (#103), whose find bar opens in the file with the term filled in.
+
+## Goals
+- Desktop Git (local repos): a search box that lists matches as file, line number and text, grouped by file.
+- Android Git (Azure DevOps and GitHub repos): the same results list, for the branch being viewed.
+- Tapping a result opens the file at that line with the find bar already holding the term.
+- Match case toggle; plain text (not regex). Case-insensitive by default, as find-in-file.
+- Results are capped (files, matches per file, total) and say so when capped.
+- **A scope you choose** before searching: the whole repo, the folder you are in, or a chosen set of folders and file types (for example `src/` and `*.cs`). The scope is remembered per repo.
+
+## Non-goals
+- Searching other branches, other repos or history.
+- Regex, whole-word, replace.
+- Searching the GitHub files tab on desktop (remote repos viewed on desktop) in this round.
+- Searching saved Markdown/JSON documents (separate, later).
+
+## Anti-goals
+- Downloading a huge repo without warning or leaving the phone unresponsive.
+- Showing results for a different commit than the one viewed.
+
+## Constraints
+- Android only reads remote repos one file at a time through the provider APIs; there is no local copy.
+- Provider code-search APIs do not fit: GitHub's covers the default branch only and Azure DevOps needs its Search extension, so neither reliably searches "the current branch".
+- `jszip` is already a dependency of `apps/app` and `packages/ui`.
+
+## Approaches considered
+1. Provider search APIs (GitHub code search, Azure DevOps Code Search): fast and no download, but default-branch only on GitHub and extension-dependent on Azure DevOps. Does not meet "the current branch".
+2. **Desktop `git grep`; Android downloads the branch as a zip and searches it on the device (chosen).** One search path per platform that works for both providers and any branch.
+3. List the tree and fetch every file on demand: simplest, but slow and rate-limited on anything sizeable. Rejected.
+
+## Design
+- **Core (`@nexusmd/core`)**: a pure `searchTexts(files, query, opts)` for the Android side (files: `[{ path, text }]`), reusing `findMatches`; returns `{ results: [{ path, matches: [{ line, text, start, end }] }], capped }`. Caps: 200 files with matches, 50 matches per file, 1000 total.
+- **Desktop**: new `grep` on `IGitAdapter` (`modules/git`, main-process `git-files.cjs`), running `git grep -n -I -F --no-color` (`-i` unless match case) on the worktree at the checked-out state, with the same caps, and returning the same result shape. Skips binary files (`-I`). A search box in the Git file explorer (renderer) lists the results; clicking one opens the file via the existing explorer selection with the `CodeEditor` `line` prop and the find bar opened on the term.
+- **Scope** (both platforms): `{ folders: string[], extensions: string[] }`, empty meaning everything; a file is in scope when it is under one of the folders (or none are set) and has one of the extensions (or none are set). A pure `inScope(path, scope)` in `@nexusmd/core` decides it. Desktop passes the scope to `git grep` as pathspecs (`-- 'src/' '*.cs'`). Android lists the branch's file tree (one request), applies `inScope`, and then:
+  - **60 files or fewer in scope:** fetches just those files (no zip) and searches them.
+  - **More than 60:** shows how many files and, when known, the download size, and downloads the branch as a zip (Azure DevOps items API with `$format=zip`; GitHub zipball for the ref), unpacking it with `jszip`, keeping only in-scope text files under 1 MB.
+  - Fetched or unpacked texts are cached in memory per (repo, branch, commit id, file) and dropped when the branch head changes or the repo is left. A size guard (about 50 MB compressed) stops with a message instead of downloading. Progress ("Fetching n of N…", "Searching…") shows in the results area.
+- **Results UI**: the same shape on both (grouped by file, line number and a snippet with the match marked). Android: a search icon in the repo's Files tab opens a search screen; results open the existing `FileViewer` at the line with the find bar open on the term.
+
+## Decisions made with the user
+- Find a line or statement within a repo; current branch only; plain text results as file and line.
+
+## My calls (please check)
+- Plain text only, case-insensitive with a toggle; no regex.
+- Desktop covers local repos only; the GitHub tab on desktop is a later step.
+- Android fetches individual files for a small scope and falls back to the zip for a large one, instead of using provider search (GitHub's is default-branch only and can be stale); the 60-file switch point, the 50 MB guard and the caps are my numbers.
+- The scope picker offers folders (chosen from the repo's tree) and extensions typed as a list; no free-form glob patterns.
+- Result caps 200 files / 50 per file / 1000 total.
+
+## Left to the builder
+- Exact file and component names and styling.
+- How each provider's zip endpoint is called through the existing `git-backend.js` / HTTP adapters (including auth and the native HTTP path).
+- Whether the unpack happens in a worker to keep the phone responsive.
+- Test layout (core unit tests; main-process `git grep` integration test in a temp repo; component tests for each results list).

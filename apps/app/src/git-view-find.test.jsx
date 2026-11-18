@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 
 vi.mock('@capacitor/core', () => ({ CapacitorHttp: undefined }))
@@ -13,6 +13,7 @@ const fake = vi.hoisted(() => {
       listItems: async () => [{ name: 'a.txt', path: '/a.txt', isFolder: false }, { name: 'README.md', path: '/README.md', isFolder: false }],
       getFile: async (_r, _b, path) => files[path],
       listCommits: async () => [],
+      listTree: async () => ({ files: ['a.txt', 'README.md'], commit: 'c1' }),
     },
   }
 })
@@ -85,5 +86,49 @@ describe('Git file viewer find', () => {
     const bar = screen.getByRole('search')
     expect(bar.style.position).toBe('sticky')
     expect(bar.style.top).toBe('0px')
+  })
+})
+
+describe('Git repo search', () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms))
+  const swipeBack = async () => { window.history.back(); await wait(30) }
+  const openRepo = async () => { fireEvent.click(await screen.findByText('alpha')); await screen.findByText('a.txt') }
+  const runSearch = async q => {
+    fireEvent.click(screen.getByLabelText('Search in files'))
+    fireEvent.change(await screen.findByLabelText('Search text'), { target: { value: q } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+  }
+
+  it('opens a result in the file viewer on its own match, with the term in the find bar', async () => {
+    render(<GitView />)
+    await openRepo()
+    await runSearch('foo')
+    const group = (await screen.findByText('a.txt', { selector: '.lbl' })).closest('[role="group"]')
+    fireEvent.click(within(group).getByText('3').closest('button'))
+    await screen.findByText(/qux/)
+    await waitFor(() => expect(screen.getByRole('search').querySelector('input').value).toBe('foo'))
+    await waitFor(() => expect(document.querySelector('[role="search"] [aria-live]').textContent).toBe('3 of 3'))
+  })
+  it('the back gesture goes from the file to the results, then to the repository', async () => {
+    render(<GitView />)
+    await openRepo()
+    await runSearch('foo')
+    const group = (await screen.findByText('a.txt', { selector: '.lbl' })).closest('[role="group"]')
+    fireEvent.click(within(group).getByText('1').closest('button'))
+    await screen.findByText(/qux/)
+    await swipeBack()
+    expect(await screen.findByText('a.txt', { selector: '.lbl' })).toBeTruthy()
+    expect(screen.getByLabelText('Search text').value).toBe('foo')
+    await swipeBack()
+    expect(await screen.findByLabelText('Search in files')).toBeTruthy()
+    expect(screen.queryByLabelText('Search text')).toBeNull()
+  })
+  it('shows a markdown result as raw text, so the line number is the source line', async () => {
+    render(<GitView />)
+    await openRepo()
+    await runSearch('foo and')
+    const group = (await screen.findByText('README.md', { selector: '.lbl' })).closest('[role="group"]')
+    fireEvent.click(within(group).getByText('3').closest('button'))
+    await waitFor(() => expect(document.querySelector('.m-code')).toBeTruthy())
   })
 })
