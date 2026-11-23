@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppUpdatePlugin.class);
         registerPlugin(ArtifactDownloadPlugin.class);
         registerPlugin(OpenedFilePlugin.class);
+        registerPlugin(HomeWidgetsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

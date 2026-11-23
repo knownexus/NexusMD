@@ -7,7 +7,7 @@ import { createGoogleEvent } from './google-calendar.js';
 import { refreshNow } from './refresh.js';
 import { helmPushPref, effectiveNeedsMe, Flash, Sheet } from './components.jsx';
 import { getIsoYearWeek, getMondayOfDate, getYearWeekForOffset, orderTabs, moveTab, placeTabs, newWidgetsAfterSave } from '@nexusmd/core';
-import { OPEN_SETTINGS_EVENT } from '@nexusmd/ui';
+import { OPEN_SETTINGS_EVENT, loadGlobalNotes } from '@nexusmd/ui';
 import { HelmData, HelmApi } from './data.jsx';
 import { useProfile, ProfileProvider } from './profile-context.jsx';
 import { useTweaks } from './tweaks-panel.jsx';
@@ -29,12 +29,14 @@ import { createGithubHttpAdapter } from './github-client.js';
 import { useOffScreens } from './work-screens.js';
 import { EditorScreen, editorStore } from './editor-screen.jsx';
 import { GitView } from './git-view.jsx';
-import { PLATFORM as SHORTCUT_PLATFORM } from './shortcut-host.js';
+import { PLATFORM as SHORTCUT_PLATFORM, openTarget } from './shortcut-host.js';
 import { apiFileAdapter } from './adapters/api-file.js';
 import { scriptRunnerAdapter } from './adapters/api-script-runner.js';
 import { apiHttpAdapter } from './adapters/api-http.js';
 import { secureStorageAdapter } from './adapters/secureStorage.js';
 import { watchOpenedFiles } from './opened-file.js';
+import { buildWidgetSnapshot, pushWidgetSnapshot, routeWidgetLink, homeWidgetsPlugin } from './home-screen-widgets.js';
+import { deepLinkAdapter } from './adapters/deepLink.js';
 import { registerCloudDeepLink, hydrateCloudTokens } from './cloud-auth.js';
 import { startAppAutoSync } from './sync.js';
 import { DashboardView } from './views/view-dashboard.jsx';
@@ -1151,6 +1153,31 @@ function AppShell() {
     if (!had) setTweakRef.current('homeWidgets', newWidgetsAfterSave(current, widget));
     showFlash(had ? 'Already on Home' : 'Pinned to Home', 'check');
   }, SHORTCUT_PLATFORM), [showFlash]);
+
+  // Android home-screen widgets (Tasks, Notes, Git, Links): push what they draw to the native side, and open
+  // whatever a tap on one asks for (nexusmd://widget/...).
+  const widgetsRef = useRef([]); widgetsRef.current = Array.isArray(tweaks.homeWidgets) ? tweaks.homeWidgets : [];
+  const pushWidgets = useCallback(() => {
+    if (!homeWidgetsPlugin) return;
+    let notes = [];
+    try { notes = loadGlobalNotes() || []; } catch (_) {}
+    pushWidgetSnapshot(buildWidgetSnapshot({
+      tasks: plannerData.tasks, notes, prs, builds: HelmData?.BUILDS || [], homeWidgets: widgetsRef.current,
+    }));
+  }, [plannerData, prs]);
+  useEffect(() => {
+    if (!homeWidgetsPlugin) return undefined;
+    const t = setTimeout(pushWidgets, 800);
+    const onHide = () => { if (document.visibilityState === 'hidden') pushWidgets(); };
+    document.addEventListener('visibilitychange', onHide);
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', onHide); };
+  }, [pushWidgets, tweaks.homeWidgets, dataVersion]);
+  useEffect(() => deepLinkAdapter.onLink((url) => {
+    const r = routeWidgetLink(url, widgetsRef.current);
+    if (!r) return;
+    if (r.target) openTarget(r.target);
+    else window.dispatchEvent(new CustomEvent('helm:navigate', { detail: { view: r.view } }));
+  }), []);
 
   useEffect(() => {
     const h = (e) => {

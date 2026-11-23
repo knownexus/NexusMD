@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/widget_bg">
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/widget_text"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:maxLines="1" />
+
+    <TextView
+        android:id="@+id/widget_count"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/widget_muted"
+        android:textSize="12sp"
+        android:maxLines="1" />
+
+    <TextView
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="@color/widget_muted"
+        android:textSize="13sp" />
+
+    <TextView android:id="@+id/widget_row0" style="@style/WidgetRow" />
+    <TextView android:id="@+id/widget_row1" style="@style/WidgetRow" />
+    <TextView android:id="@+id/widget_row2" style="@style/WidgetRow" />
+    <TextView android:id="@+id/widget_row3" style="@style/WidgetRow" />
+    <TextView android:id="@+id/widget_row4" style="@style/WidgetRow" />
+</LinearLayout>
