@@ -17,7 +17,7 @@ const { compareVersions, readApp, readUpdateState, VERSION } = require('./app-re
 const { SHELL_API } = require('./shell-api.cjs');
 const { PUBLIC_KEY } = require('./app-update-key.cjs');
 
-const INDEX_URL = 'https://github.com/knownexus/NexusMD-Mono/releases/download/apps-latest/apps-index.json';
+const INDEX_URL = 'https://github.com/knownexus/NexusMD/releases/download/apps-latest/apps-index.json';
 const PACKAGE_FILE = /^[a-z][a-z0-9-]*-\d+\.\d+\.\d+\.nxapp$/;
 
 async function download(fetch, url, as) {

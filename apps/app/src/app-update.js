@@ -3,7 +3,7 @@
 // attaches the signed APK; this finds the newest one and compares it with the installed version.
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
-export const REPO = 'knownexus/NexusMD-Mono';
+export const REPO = 'knownexus/NexusMD';
 export const TAG_PREFIX = 'android-v';
 export const updatePlugin = registerPlugin('AppUpdate');
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-13
 **Status:** Approved design. Stage 1 implemented; stage 2 implemented (2026-10-14); stage 3 implemented (2026-10-15); stage 4 implemented (2026-10-15).
-**Repos touched:** `NexusMD-Mono` (new module). Reference implementation: `gws` in `C:\repos\DotFiles\pwsh\GitWorkspace` (C#, terminal UI), which this module replaces.
+**Repos touched:** `NexusMD` (new module). Reference implementation: `gws` in `C:\repos\DotFiles\pwsh\GitWorkspace` (C#, terminal UI), which this module replaces.
 
 ## Goal
 

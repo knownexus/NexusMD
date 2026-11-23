@@ -1,6 +1,6 @@
 # Handoff: Git Workspace redesign (NexusMD desktop)
 
-Target repo: `knownexus/NexusMD-Mono` @ `master`, scope `apps/desktop/src/views/git/` + `apps/desktop/src/views/devenv-git.css`.
+Target repo: `knownexus/NexusMD` @ `master`, scope `apps/desktop/src/views/git/` + `apps/desktop/src/views/devenv-git.css`.
 
 ## Overview
 A redesign of the Git Workspace page focused on clarity, speed and fewer clicks. It covers the overview, the branch list, changes/diff/commit, conflict resolution, history, all action dialogs and menus, and the inline git command bar with a floating output console.

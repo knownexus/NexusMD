@@ -9,7 +9,7 @@ let updater = null;
 const logger = () => (globalThis.log?.scope ? globalThis.log.scope('updater') : console);
 const getAutoUpdater = () => (updater ??= require('electron-updater').autoUpdater);
 
-const REPO = 'knownexus/NexusMD-Mono';
+const REPO = 'knownexus/NexusMD';
 
 /**
  * The repo's releases hold more than the desktop app (android-v*, apps-latest), and electron-updater's

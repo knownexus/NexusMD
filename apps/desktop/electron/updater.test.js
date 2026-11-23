@@ -11,7 +11,7 @@ describe('useNewestDesktopRelease', () => {
   const rel = (tag_name, extra = {}) => ({ tag_name, draft: false, prerelease: false, ...extra })
   const respond = (body, ok = true) => vi.fn(async () => ({ ok, status: ok ? 200 : 500, json: async () => body }))
   const updaterMock = () => ({ setFeedURL: vi.fn() })
-  const BASE = 'https://github.com/knownexus/NexusMD-Mono/releases/download/'
+  const BASE = 'https://github.com/knownexus/NexusMD/releases/download/'
 
   it('skips an android-v release listed first in favour of the newest v<semver> tag, with a timeout', async () => {
     const u = updaterMock()

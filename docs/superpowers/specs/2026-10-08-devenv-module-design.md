@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-08
 **Status:** Implemented (phases 1–6)
-**Repos touched:** `NexusMD-Mono` (new module) and `C:\repos\dev-environment` (devenv: host mode, protocol, catalog)
+**Repos touched:** `NexusMD` (new module) and `C:\repos\dev-environment` (devenv: host mode, protocol, catalog)
 
 ## Goal
 
