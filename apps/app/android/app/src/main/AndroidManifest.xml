@@ -30,6 +30,14 @@
                 <data android:scheme="nexusmd" android:host="oauth" />
             </intent-filter>
 
+            <!-- Home-screen widget taps: nexusmd://widget/<tasks|notes|git|link>. Not BROWSABLE: only the widgets (and this
+                 app) start it, never a web page. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="nexusmd" android:host="widget" />
+            </intent-filter>
+
             <!-- Google sign-in redirect: com.knownexus.nexus:/oauth2redirect?code=&state= (see google-oauth.js) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -124,6 +132,42 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Per-widget settings: shown when a widget is added, and from the launcher's widget settings. -->
+        <activity android:name=".WidgetConfigActivity" android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.Dialog">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver android:name=".TasksWidgetProvider" android:exported="true" android:label="@string/widget_tasks_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_tasks" />
+        </receiver>
+
+        <receiver android:name=".NotesWidgetProvider" android:exported="true" android:label="@string/widget_notes_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_notes" />
+        </receiver>
+
+        <receiver android:name=".GitWidgetProvider" android:exported="true" android:label="@string/widget_git_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_git" />
+        </receiver>
+
+        <receiver android:name=".LinksWidgetProvider" android:exported="true" android:label="@string/widget_link_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info_link" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

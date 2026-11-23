@@ -1,7 +1,15 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Nexus</string>
-    <string name="title_activity_main">Nexus</string>
+    <string name="app_name">NexusMD</string>
+    <string name="title_activity_main">NexusMD</string>
     <string name="package_name">com.knownexus.nexus</string>
     <string name="custom_url_scheme">com.knownexus.nexus</string>
+    <string name="widget_tasks_label">NexusMD Tasks</string>
+    <string name="widget_notes_label">NexusMD Notes</string>
+    <string name="widget_git_label">NexusMD Git</string>
+    <string name="widget_link_label">NexusMD Links</string>
+    <string name="widget_tasks_desc">Open planner tasks</string>
+    <string name="widget_notes_desc">Recent notes</string>
+    <string name="widget_git_desc">Pull requests and builds</string>
+    <string name="widget_link_desc">Pinned repo files, documents and folders</string>
 </resources>

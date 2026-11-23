@@ -36,7 +36,7 @@ public class AppUpdatePlugin extends Plugin {
 
     // Only this repository's Android release APKs are downloaded, whatever the web side asks for. The URL is
     // parsed and matched as a whole (not by prefix), so a path like ../ or an encoded slash cannot widen it.
-    private static final Pattern ALLOWED_PATH = Pattern.compile("^/knownexus/NexusMD-Mono/releases/download/android-v\\d+\\.\\d+\\.\\d+/[\\w.-]+\\.apk$");
+    private static final Pattern ALLOWED_PATH = Pattern.compile("^/knownexus/NexusMD/releases/download/android-v\\d+\\.\\d+\\.\\d+/[\\w.-]+\\.apk$");
     // GitHub serves the asset from its own storage hosts after a redirect.
     private static final Pattern STORAGE_HOST = Pattern.compile("^([\\w-]+\\.)*githubusercontent\\.com$");
     private static final long MAX_BYTES = 200L * 1024 * 1024;

@@ -56,5 +56,5 @@ module.exports = {
   // release-desktop.yml). Published straight away, the app's updater could find a release whose
   // latest.yml wasn't uploaded yet. The kinds must match: electron-builder skips the upload (with only
   // a warning) when another platform has already created the release as the other kind.
-  publish: { provider: 'github', owner: 'knownexus', repo: 'NexusMD-Mono', releaseType: 'draft' },
+  publish: { provider: 'github', owner: 'knownexus', repo: 'NexusMD', releaseType: 'draft' },
 };

@@ -200,7 +200,7 @@
     "publish": {
       "provider": "github",
       "owner": "knownexus",
-      "repo": "NexusMD-Mono",
+      "repo": "NexusMD",
       "releaseType": "draft"
     }
   }

@@ -1,6 +1,6 @@
 # Handoff: Git Workspace v2 + Regex Tester
 
-Target repo: `knownexus/NexusMD-Mono` @ `master`. Scope: `modules/git/src/renderer/` (+ `git-workspace.css`), and `packages/ui/src/views/view-regex-tester.jsx` + `view-documents.jsx` (see **Part 2** at the end).
+Target repo: `knownexus/NexusMD` @ `master`. Scope: `modules/git/src/renderer/` (+ `git-workspace.css`), and `packages/ui/src/views/view-regex-tester.jsx` + `view-documents.jsx` (see **Part 2** at the end).
 
 ## Overview
 A layout pass on the Git Workspace page. All existing behaviour is kept; the layout changes reduce header rows, remove the Changes toolbar, and move commit and per-file actions into a collapsible right rail. The chosen direction is **1b "Two lanes + commit rail"**, carried through every state (2a–2c) and both Files tabs (3a–3b).
