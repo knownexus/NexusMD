@@ -17,10 +17,11 @@ public class GitWidgetProvider extends NexusWidgetProvider {
         if (git == null) return c;
         int prs = git.optInt("openPrs", 0);
         int failed = git.optInt("failedBuilds", 0);
+        c.big = String.valueOf(prs);
         c.count = prs + (prs == 1 ? " open PR" : " open PRs") + (failed > 0 ? " · " + failed + " failed" : "");
         c.empty = "No open pull requests.";
         JSONArray items = array(git, "items");
-        for (int i = 0; i < items.length(); i++) c.add(items.getJSONObject(i).optString("title"), null);
+        for (int i = 0; i < items.length(); i++) c.add(items.getJSONObject(i).optString("title"), "", null);
         return c;
     }
 }

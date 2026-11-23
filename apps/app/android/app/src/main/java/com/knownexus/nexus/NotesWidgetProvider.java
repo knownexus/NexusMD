@@ -17,7 +17,8 @@ public class NotesWidgetProvider extends NexusWidgetProvider {
         if (notes == null) return c;
         c.empty = "No notes yet.";
         JSONArray items = array(notes, "items");
-        for (int i = 0; i < items.length(); i++) c.add(items.getJSONObject(i).optString("title"), null);
+        c.big = String.valueOf(items.length());
+        for (int i = 0; i < items.length(); i++) c.add(items.getJSONObject(i).optString("title"), "", null);
         return c;
     }
 }

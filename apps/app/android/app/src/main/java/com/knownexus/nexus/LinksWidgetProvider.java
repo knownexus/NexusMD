@@ -16,9 +16,10 @@ public class LinksWidgetProvider extends NexusWidgetProvider {
         Content c = new Content();
         c.empty = "Pin a file or repo from Home to see it here.";
         JSONArray links = array(snapshot, "links");
+        c.big = String.valueOf(links.length());
         for (int i = 0; i < links.length(); i++) {
             JSONObject l = links.getJSONObject(i);
-            c.add(l.optString("title"), "link?id=" + Uri.encode(l.optString("id")));
+            c.add(l.optString("title"), l.optString("kind"), "link?id=" + Uri.encode(l.optString("id")));
         }
         return c;
     }

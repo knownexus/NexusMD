@@ -133,6 +133,14 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <!-- Per-widget settings: shown when a widget is added, and from the launcher's widget settings. -->
+        <activity android:name=".WidgetConfigActivity" android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.Dialog">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver android:name=".TasksWidgetProvider" android:exported="true" android:label="@string/widget_tasks_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
