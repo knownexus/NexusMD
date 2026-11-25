@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, act } from '@testing-library/react'
+import { render, screen, cleanup, act, fireEvent } from '@testing-library/react'
 import { NexusDataProvider } from '@nexusmd/ui'
 import { getProfileKey } from '@nexusmd/shell-sdk'
 import documents from './index.js'
@@ -93,5 +93,67 @@ describe('Documents app: a Home shortcut to one saved document', () => {
     render(<NexusDataProvider value={{ storage: localStorage, getProfileKey, pushPref: () => {} }}><Screen /></NexusDataProvider>)
     act(() => { openedFiles.openDoc({ tool: 'json', docId: 'j1' }) })
     expect(screen.getByText('dark')).toBeTruthy()
+  })
+})
+
+describe('Documents app: several files opened with the app are tabs', () => {
+  const Screen = documents.views.markdown
+  const withData = ui => <NexusDataProvider value={{ storage: localStorage, getProfileKey, pushPref: () => {} }}>{ui}</NexusDataProvider>
+  const md = (name, text = `# ${name}`) => ({ name, text, path: `C:/tabs/${name}`, stamp: `s-${name}`, bom: false })
+  const editor = () => document.querySelector('textarea')
+  const closeAll = () => act(() => { for (const t of [...openedFiles.getSnapshot().tabs]) openedFiles.close(t.path) })
+  afterEach(() => { closeAll(); vi.restoreAllMocks() })
+
+  it('shows a tab for each file and the newest one’s text', () => {
+    render(withData(<Screen />))
+    act(() => { openedFiles.add(md('one.md')); openedFiles.add(md('two.md')); openedFiles.add(md('three.md')) })
+    expect(screen.getAllByRole('tab', { name: /\.md/ })).toHaveLength(3)
+    expect(editor().value).toBe('# three.md')
+  })
+
+  it('switching tabs shows each file’s own text, including unsaved edits', () => {
+    render(withData(<Screen />))
+    act(() => { openedFiles.add(md('one.md')); openedFiles.add(md('two.md')) })
+    fireEvent.change(editor(), { target: { value: 'edited two' } })
+    fireEvent.click(screen.getByRole('tab', { name: /one\.md/ }))
+    expect(editor().value).toBe('# one.md')
+    fireEvent.click(screen.getByRole('tab', { name: /two\.md/ }))
+    expect(editor().value).toBe('edited two')
+    expect(screen.getByRole('tab', { name: /two\.md/ }).textContent).toMatch(/●/)
+  })
+
+  it('a file changed on disk updates an unedited tab, and asks about an edited one', () => {
+    render(withData(<Screen />))
+    act(() => { openedFiles.add(md('one.md')); openedFiles.add(md('two.md')) })
+    act(() => { openedFiles.diskChanged('C:/tabs/two.md', { text: '# two from disk', stamp: 'x1' }) })
+    expect(editor().value).toBe('# two from disk')
+    fireEvent.change(editor(), { target: { value: 'my edit' } })
+    act(() => { openedFiles.diskChanged('C:/tabs/two.md', { text: '# two again', stamp: 'x2' }) })
+    expect(editor().value).toBe('my edit')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    expect(editor().value).toBe('# two again')
+  })
+
+  it('closing a tab with unsaved edits asks first, and a declined close keeps it', () => {
+    render(withData(<Screen />))
+    act(() => { openedFiles.add(md('one.md')) })
+    fireEvent.change(editor(), { target: { value: 'unsaved' } })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Close one.md' }))
+    expect(confirm).toHaveBeenCalled()
+    expect(screen.getByRole('tab', { name: /one\.md/ })).toBeTruthy()
+    confirm.mockReturnValue(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Close one.md' }))
+    expect(screen.queryByRole('tab', { name: /one\.md/ })).toBeNull()
+  })
+
+  it('closing a clean tab does not ask, and closing the last returns to the plain screen', () => {
+    render(withData(<Screen />))
+    act(() => { openedFiles.add(md('one.md')) })
+    const confirm = vi.spyOn(window, 'confirm')
+    fireEvent.click(screen.getByRole('button', { name: 'Close one.md' }))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(screen.queryByRole('tab', { name: /\.md/ })).toBeNull()
+    expect(editor()).toBeTruthy()
   })
 })

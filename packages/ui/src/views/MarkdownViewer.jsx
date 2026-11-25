@@ -736,7 +736,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
     const open = sourceRef.current;
     if (!open?.path || !onSourceChange) return;
     if (loadingTextRef.current !== null) { if (markdown === loadingTextRef.current) loadingTextRef.current = null; return; }
-    if (markdown !== (open.text ?? '')) onSourceChange({ text: markdown, dirty: true });
+    if (markdown !== (open.text ?? '')) onSourceChange({ text: markdown, dirty: true }, open.path);
   }, [markdown]);
 
   // Persist learnMode to localStorage
@@ -855,7 +855,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
         if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
         sourceRef.current = { ...openSource, stamp: result.stamp, text: markdownRef.current };
         loadedRef.current = { path: openSource.path, stamp: result.stamp };
-        onSourceChange?.({ text: markdownRef.current, stamp: result.stamp, dirty: false });
+        onSourceChange?.({ text: markdownRef.current, stamp: result.stamp, dirty: false }, openSource.path);
         setSaveStatus('saved');
       } catch (err) { log.warn('saving the original file failed', err); setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
       return;

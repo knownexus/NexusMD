@@ -304,7 +304,7 @@ describe('MarkdownViewer original files in tabs', () => {
     const onSourceChange = vi.fn()
     render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
     fireEvent.change(editor(), { target: { value: '# Changed' } })
-    expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', dirty: true })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', dirty: true }, 'C:/work/readme.md')
   })
 
   it('reports the new stamp and dirty:false after a successful save, and still says saved', async () => {
@@ -314,7 +314,7 @@ describe('MarkdownViewer original files in tabs', () => {
     const { rerender } = render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
     fireEvent.change(editor(), { target: { value: '# Changed' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', stamp: 'v2', dirty: false }))
+    await waitFor(() => expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', stamp: 'v2', dirty: false }, 'C:/work/readme.md'))
     // The store hands the same change back as the new source: the buffer stays and nothing is reset.
     rerender(<MarkdownViewer source={src({ text: '# Changed', stamp: 'v2' })} onSourceChange={onSourceChange} />)
     expect(editor().value).toBe('# Changed')
@@ -337,7 +337,7 @@ describe('MarkdownViewer original files in tabs', () => {
     expect(editor().value).toBe('BBB')
     fireEvent.change(editor(), { target: { value: 'BBB!' } })
     expect(onSourceChange).toHaveBeenCalledTimes(1)
-    expect(onSourceChange).toHaveBeenLastCalledWith({ text: 'BBB!', dirty: true })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: 'BBB!', dirty: true }, 'C:/work/b.md')
   })
 
   it('a changed-on-disk file with unsaved edits keeps the edits and offers Reload and Keep mine', () => {
@@ -367,6 +367,6 @@ describe('MarkdownViewer original files in tabs', () => {
     const { rerender } = render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
     rerender(<MarkdownViewer source={src({ text: '# Original', stamp: 'v2' })} onSourceChange={onSourceChange} />)
     fireEvent.change(editor(), { target: { value: '# Edited' } })
-    expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Edited', dirty: true })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Edited', dirty: true }, 'C:/work/readme.md')
   })
 })
