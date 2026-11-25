@@ -4,7 +4,7 @@
 // OutlookService (MSAL) or web's server-proxied Google fetch.
 import React from 'react'
 import {
-  Icon, toast,
+  Icon, toast, PageHead,
   WeekGrid, MonthView, YearView, AgendaView, EventDetailModal,
   getWeekDays, getMonthGrid, getYearMonths, getAgendaDays,
   nowTopPx, todayStr, isoDate, MONTH_NAMES, MONTH_SHORT,
@@ -358,12 +358,9 @@ export function CalendarView({ calendarEvents, setCalendarEvents, onNavigatePlan
       <NewGoogleEventModal open={newGoogleOpen} defaultDate={newGoogleDate} defaultTime={newGoogleTime}
         onClose={() => setNewGoogleOpen(false)} onCreated={() => setGoogleTick((t) => t + 1)} />
 
-      <div className="page-head">
-        <div>
-          <h1>Calendar</h1>
-          <div className="sub">{headerTitle}</div>
-        </div>
-        <div className="page-head-actions" style={{ gap: 8 }}>
+      <PageHead title="Calendar"
+        sub={<>{headerTitle}</>}
+        actions={<>
           <MicrosoftCalendarBanner connected={msConnected} syncing={outlookSyncing} error={outlookError} onRefresh={() => setOutlookTick((t) => t + 1)} />
           <GoogleCalendarBanner syncing={googleSyncing} error={googleError} onRefresh={() => setGoogleTick((t) => t + 1)} />
           {isGoogleConnected() && (
@@ -391,8 +388,7 @@ export function CalendarView({ calendarEvents, setCalendarEvents, onNavigatePlan
               <Icon name="chevron-right" size={14} />
             </button>
           </div>
-        </div>
-      </div>
+        </>} />
 
       {(calView === 'week' || calView === 'workweek') && weekDays && (
         <WeekGrid days={weekDays} eventsByDay={eventsByDay} today={today} isCurrentPeriod={isCurrentPeriod} nowPx={nowPx}

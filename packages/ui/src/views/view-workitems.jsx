@@ -54,6 +54,7 @@ export async function patchWorkItem(workItemSource, id, ops) {
 }
 
 import { WI_TYPE_STATES_CACHE_KEY } from './wi-cache-key.js';
+import { PageHead } from '../page-head.jsx'
 
 const log = rendererLog('work', 'workitems')
 export { WI_TYPE_STATES_CACHE_KEY };
@@ -797,16 +798,13 @@ export function WorkItemsView({ items, setItems, onOpen, onCreate, team: teamPro
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1>Work items</h1>
-          <div className="sub">
+      <PageHead title="Work items"
+        sub={<>
             {allItems.length}{totalMatched !== null && totalMatched > allItems.length ? ` of ${totalMatched}` : ''} loaded
             · {allItems.filter(w => w.sprint).length} in current sprint
             · {filtered.length} match filters
-          </div>
-        </div>
-        <div className="page-head-actions">
+          </>}
+        actions={<>
           {multiProvider && (
             <div role="group" aria-label="Display mode" style={{ display: 'flex', background: 'var(--surface-2)', borderRadius: 6, padding: 2 }}>
               {[['merged', 'Merged'], ['separate', 'Separate']].map(([v, l]) => (
@@ -823,8 +821,7 @@ export function WorkItemsView({ items, setItems, onOpen, onCreate, team: teamPro
           <TriageStatusLine style={{ marginRight: 4 }} />
           <TriageExportButton />
           <button className="btn sm primary" onClick={onCreate}><Icon name="plus" size={13}/> New work item</button>
-        </div>
-      </div>
+        </>} />
 
       {separate && (
         <div role="tablist" aria-label="Work item source" style={{ display: 'flex', gap: 4, marginBottom: 12 }}>

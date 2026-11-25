@@ -2,6 +2,7 @@ import React from 'react';
 import { toast as defaultToast } from '../toast.jsx';
 import { Icon as DefaultIcon } from '../icons.jsx';
 import { PlModal, PlFld } from '../planner-chips.jsx';
+import { PageHead } from '../page-head.jsx'
 import {
   newListId, safeListUrl, toBucket,
   FIELD_DEFS, DEFAULT_STATUSES, DEFAULT_FIELDS, PRIORITY_LABELS, BUCKET_ORDER, BUCKET_LABELS,
@@ -527,10 +528,7 @@ function ListsView({ data, onChange, toast = defaultToast, Icon = DefaultIcon, d
         </React.Fragment>
       ) : (
         <div data-screen-label="Lists">
-          <div className="page-head">
-            <div><h1>Lists</h1></div>
-            <div className="page-head-actions">{actions}</div>
-          </div>
+          <PageHead title="Lists" actions={actions} />
           {body}
         </div>
       )}

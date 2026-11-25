@@ -8,6 +8,7 @@ import { Avatar, NotificationBanner, ProjectChip, usePersisted } from '../app-co
 import { Icon } from '../icons.jsx'
 import { toast } from '../toast.jsx'
 import { useNexusData } from '../data-context.jsx'
+import { PageHead } from '../page-head.jsx'
 import {
   formatDateTime, resolveFields, toggleField, reorderField, BUILDS_TABLE_COLUMNS,
   visibleColumns, gridTemplate, minTableWidth,
@@ -378,12 +379,9 @@ export function BuildsView({ builds, acknowledgedBuilds, setAcknowledgedBuilds, 
   return (
     <div>
       {/* ── Page header ── */}
-      <div className="page-head">
-        <div>
-          <h1>Builds</h1>
-          <div className="sub">{passing} passing · {failing} failing{acknowledged > 0 ? ` · ${acknowledged} acknowledged` : ''} · {running} running{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}</div>
-        </div>
-        <div className="page-head-actions">
+      <PageHead title="Builds"
+        sub={<>{passing} passing · {failing} failing{acknowledged > 0 ? ` · ${acknowledged} acknowledged` : ''} · {running} running{cancelled > 0 ? ` · ${cancelled} cancelled` : ''}</>}
+        actions={<>
           <button className="btn sm" disabled={deployStatus === 'deploying'} onClick={deployToUat}
             style={deployStatus === 'ok' ? { borderColor:'var(--success)', color:'var(--success)' }
                  : deployStatus === 'err' ? { borderColor:'var(--danger)', color:'var(--danger)' } : {}}>
@@ -391,8 +389,7 @@ export function BuildsView({ builds, acknowledgedBuilds, setAcknowledgedBuilds, 
             {deployStatus === 'deploying' ? ' Deploying…' : deployStatus === 'ok' ? ' Queued!' : deployStatus === 'err' ? ' Failed' : ' Deploy to UAT'}
           </button>
           <button className="btn sm ghost"><Icon name="refresh" size={13}/> Refresh</button>
-        </div>
-      </div>
+        </>} />
 
       {initialNewCount > 0 && !bannerDismissed && (
         <NotificationBanner

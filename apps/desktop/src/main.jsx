@@ -9,6 +9,7 @@ import {
   Icon, CardFrame, NexusDataProvider, ToastHost,
   TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakButton,
   THEME_MODES, paletteFor, ProfileGate, AccountGate, toast, listenForPins, OPEN_SETTINGS_EVENT,
+  HeaderSlotContext,
 } from '@nexusmd/ui'
 import { startQueueFlushing } from './offline-queue-app.js'
 import { isBareStandalone, effectiveSidebar, ICON_RAIL_WIDTH, sidebarGroups, shortcutNav, SIDEBAR_BREAKPOINT, toggledSidebar, mountedViews } from './layout.js'
@@ -205,6 +206,8 @@ function App() {
   const sidebarForced = winWidth < SIDEBAR_BREAKPOINT
   // Shown by hand on a NAV_HIDDEN view; resets whenever the view changes.
   const [navShown, setNavShown] = React.useState(false)
+  // The header's spare room: the showing page puts its summary and actions there instead of repeating its title.
+  const [headerSlot, setHeaderSlot] = React.useState(null)
   React.useEffect(() => { setNavShown(false) }, [view])
   const navHidden = BARE || (NAV_HIDDEN.has(view) && !navShown)
 
@@ -387,6 +390,7 @@ function App() {
             <Icon name={active.icon} size={16} />
             <h1 style={{ fontSize: 15, margin: 0 }}>{active.label}</h1>
             <ModuleTopbar view={view} />
+            <div ref={setHeaderSlot} className="topbar-slot" />
             {BARE && (
               <button className="btn sm ghost" style={{ marginLeft: 'auto' }}
                 aria-label={view === SETTINGS_NAV.id ? `Back to ${INSTALLED_NAV[0].label}` : 'Settings'}
@@ -409,7 +413,9 @@ function App() {
           }}>
             {mountedViews(visited.filter(id => !offViews.includes(id)), view).map(id => (
             <div key={id} style={{ display: id === view ? 'contents' : 'none' }}>
-            <ViewBody view={id} active={id === view} tweaks={tweaks} setTweak={setTweak} />
+            <HeaderSlotContext.Provider value={id === view ? headerSlot : null}>
+              <ViewBody view={id} active={id === view} tweaks={tweaks} setTweak={setTweak} />
+            </HeaderSlotContext.Provider>
             </div>
             ))}
           </section>

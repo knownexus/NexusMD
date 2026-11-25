@@ -124,7 +124,7 @@ describe('DocumentsBar', () => {
     const { container } = renderDocuments()
     const bar = container.querySelector('.nx-docs-bar')
     expect(bar.style.height).toBe('48px')
-    expect(bar.querySelector('button[style*="var(--accent)"]')).toBeNull()
+    expect(bar.querySelector('[role="tablist"] button[style*="var(--accent)"]')).toBeNull()
   })
 
   it('says nothing about saving on a tool that does not report it', () => {

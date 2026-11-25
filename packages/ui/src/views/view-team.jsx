@@ -3,6 +3,7 @@ import { Avatar, MenuButton, TypeIcon } from '../app-components.jsx'
 import { Icon } from '../icons.jsx'
 import { enrichTeamMember, formatDuration, formatClock, displayIdOf } from '@nexusmd/core'
 import { useNexusData } from '../data-context.jsx'
+import { PageHead } from '../page-head.jsx'
 import { useStopwatch } from '../use-timer.js'
 
 // view-team.jsx — Team / People view. Shared across web + desktop.
@@ -452,17 +453,14 @@ export function TeamView({ team, workItems, prs, onOpenItem, onOpenPerson, onTea
         onSave={onScheduleOneOnOne}
       />
 
-      <div className="page-head">
-        <div>
-          <h1>Team</h1>
-          <div className="sub">
+      <PageHead title="Team"
+        sub={<>
             {allVisible.length} members
             {customMembers.length > 0 && ` · ${customMembers.length} local`}
             {' · '}{allVisible.filter(t => t.status === 'online').length} online
             {' · '}{allVisible.filter(t => t.status === 'pto').length} PTO
-          </div>
-        </div>
-        <div className="page-head-actions">
+          </>}
+        actions={<>
           <div style={{ position: 'relative' }}>
             <Icon name="search" size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle)' }}/>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Find someone…" style={{
@@ -477,8 +475,7 @@ export function TeamView({ team, workItems, prs, onOpenItem, onOpenPerson, onTea
           <button className="btn sm" onClick={() => setShowAddModal(true)}>
             <Icon name="plus" size={13}/> Add member
           </button>
-        </div>
-      </div>
+        </>} />
 
       <div className="team-grid">
         {filtered.map(t => (

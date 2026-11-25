@@ -7,6 +7,7 @@ import { jsonAutoName, typeOf, setValueAtPath, deleteAtPath, allContainerPaths, 
 import { useDocumentAutosave, relativeTime } from './document-store.js'
 import { DocumentsModal } from './documents-modal.jsx'
 import { pinToHome } from '../pin-shortcut.js'
+import { ToolBarRow, DocumentsBarContext } from './documents-bar.jsx'
 import { JsonNodeSheet } from '../json-tree-ui.jsx'
 import { useFind } from '../find/use-find.js'
 import { FindBar } from '../find/find-bar.jsx'
@@ -38,6 +39,7 @@ function parseOr(text, fallback) {
 // document that is not valid JSON shows its error over an empty tree rather than the sample. `openDocId` opens that
 // saved document the same way (a Home shortcut to it).
 export function JsonEditorView({ openNewest = false, openDocId = null, source = null }) {
+  const { slot: inDocumentsBar } = React.useContext(DocumentsBarContext)
   const {
     content: rawText, setContent: setRawText, docs, currentDocId, hasUnsavedContent,
     openDoc, newDoc, deleteDoc, renameDoc, externalSource, saveStatus,
@@ -327,10 +329,10 @@ export function JsonEditorView({ openNewest = false, openDocId = null, source = 
         mark { background: var(--warning-soft); color: inherit; border-radius:2px; }
       `}</style>
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', minHeight: 44, boxSizing: 'border-box', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, marginRight: 4 }}>JSON Editor</span>
-        <div className="je-sep"/>
+      {/* Toolbar: on the Documents page it joins the page's top bar (ToolBarRow) */}
+      <ToolBarRow style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', minHeight: 44, boxSizing: 'border-box', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0, flexWrap: 'wrap' }}>
+        {!inDocumentsBar && <><span style={{ fontSize: 13, fontWeight: 600, marginRight: 4 }}>JSON Editor</span>
+        <div className="je-sep"/></>}
         <button className="je-btn" disabled={histIdx === 0} onClick={undo} title="Ctrl+Z"><Icon name="undo" size={13}/> Undo</button>
         <button className="je-btn" disabled={histIdx === history.length - 1} onClick={redo} title="Ctrl+Y"><Icon name="redo" size={13}/> Redo</button>
         <div className="je-sep"/>
@@ -375,7 +377,7 @@ export function JsonEditorView({ openNewest = false, openDocId = null, source = 
           </label>}
           <button className="je-btn" onClick={externalSource?.path ? saveOriginal : downloadJSON} title="Ctrl+S"><Icon name="download" size={13}/> Save</button>
         </div>
-      </div>
+      </ToolBarRow>
 
       {/* Workspace */}
       <div ref={workspaceRef} className="doc-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
