@@ -35,9 +35,12 @@ export function createOpenHandler({ store, api, host, notify }) {
     }
   }
 
+  // Windows starts the app once per selected file, so several arrive together. Documents get their files one after
+  // another, in the order given: read side by side, the fastest would come first and the last opened would be a matter of luck.
+  let queue = Promise.resolve()
   return function open(paths) {
     for (const path of paths) {
-      if (documentsTakes(path)) toDocuments(path)
+      if (documentsTakes(path)) queue = queue.then(() => toDocuments(path))
       else toEditor(path)
     }
   }

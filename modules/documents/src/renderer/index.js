@@ -1,5 +1,6 @@
 import { DocumentsApp } from './documents-app.jsx'
 import { openedFiles } from './opened.js'
+import { watchTabs } from './watch-tabs.js'
 
 // What the shell gets from the Documents app (see apps/desktop/src/shell/modules.js). Its view id
 // is still 'markdown'.
@@ -10,6 +11,8 @@ export default {
   id: 'documents',
   views: { markdown: DocumentsApp },
   activate(host) {
+    // Open tabs follow their files on disk (desktop only: the bridge is not there on the web).
+    if (typeof window !== 'undefined') watchTabs({ api: window.electronAPI?.editor, store: openedFiles, win: window })
     host.capabilities.provide('documents.openFile', async file => {
       const result = openedFiles.add(file)
       host.navigate('markdown')
