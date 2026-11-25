@@ -75,11 +75,11 @@ describe('files opened with the desktop app', () => {
     const { opened } = make()
     const seen = vi.fn()
     const off = opened.subscribe(seen)
-    expect(opened.getSnapshot()).toEqual({ count: 0, tool: 'markdown', docId: null })
+    expect(opened.getSnapshot()).toMatchObject({ count: 0, tool: 'markdown', docId: null })
     opened.add({ name: 'a.json', text: '{}' })
-    expect(opened.getSnapshot()).toEqual({ count: 1, tool: 'json', docId: null })
+    expect(opened.getSnapshot()).toMatchObject({ count: 1, tool: 'json', docId: null })
     opened.add({ name: 'b.md', text: 'b' })
-    expect(opened.getSnapshot()).toEqual({ count: 2, tool: 'markdown', docId: null })
+    expect(opened.getSnapshot()).toMatchObject({ count: 2, tool: 'markdown', docId: null })
     expect(seen).toHaveBeenCalledTimes(2)
     off()
     opened.add({ name: 'c.md', text: 'c' })
@@ -99,9 +99,9 @@ describe('showing one saved document (a Home shortcut)', () => {
     const seen = vi.fn()
     opened.subscribe(seen)
     expect(opened.openDoc({ tool: 'markdown', docId: 'm1' })).toEqual({ ok: true })
-    expect(opened.getSnapshot()).toEqual({ count: 1, tool: 'markdown', docId: 'm1' })
+    expect(opened.getSnapshot()).toMatchObject({ count: 1, tool: 'markdown', docId: 'm1' })
     expect(opened.openDoc({ tool: 'json', docId: 'j1' })).toEqual({ ok: true })
-    expect(opened.getSnapshot()).toEqual({ count: 2, tool: 'json', docId: 'j1' })
+    expect(opened.getSnapshot()).toMatchObject({ count: 2, tool: 'json', docId: 'j1' })
     expect(seen).toHaveBeenCalledTimes(2)
   })
 
@@ -130,5 +130,106 @@ describe('showing one saved document (a Home shortcut)', () => {
     opened.openDoc({ tool: 'markdown', docId: 'm1' })
     opened.add({ name: 'new.md', text: 'fresh' })
     expect(opened.getSnapshot().docId).toBeNull()
+  })
+})
+
+describe('tabs for path-backed Markdown files', () => {
+  const md = (name, extra = {}) => ({ name, text: `# ${name}`, path: `C:/work/${name}`, stamp: `s-${name}`, bom: false, ...extra })
+  const tabsOf = o => o.getSnapshot().tabs.map(t => t.name)
+
+  it('adds a tab per path and makes the newest active', () => {
+    const { opened } = make()
+    opened.add(md('a.md')); opened.add(md('b.md'))
+    expect(tabsOf(opened)).toEqual(['a.md', 'b.md'])
+    expect(opened.getSnapshot().activePath).toBe('C:/work/b.md')
+    expect(opened.getSnapshot().source).toMatchObject({ name: 'b.md', text: '# b.md' })
+  })
+
+  it('a second add of the same path (other case or slashes) activates instead of duplicating', () => {
+    const { opened } = make()
+    opened.add(md('a.md')); opened.add(md('b.md'))
+    opened.add({ ...md('a.md'), path: 'c:\\work\\A.md' })
+    expect(tabsOf(opened)).toEqual(['a.md', 'b.md'])
+    expect(opened.getSnapshot().activePath).toBe('C:/work/a.md')
+  })
+
+  it('ten adds in a burst give ten tabs, the last one active', () => {
+    const { opened } = make()
+    for (let i = 0; i < 10; i++) opened.add(md(`f${i}.md`))
+    expect(opened.getSnapshot().tabs).toHaveLength(10)
+    expect(opened.getSnapshot().activePath).toBe('C:/work/f9.md')
+  })
+
+  it('activate switches the source to that tab, keeping its unsaved text', () => {
+    const { opened } = make()
+    opened.add(md('a.md')); opened.add(md('b.md'))
+    opened.update('C:/work/a.md', { text: 'edited', dirty: true })
+    opened.activate('C:/work/a.md')
+    expect(opened.getSnapshot().source).toMatchObject({ name: 'a.md', text: 'edited', dirty: true })
+  })
+
+  it('diskChanged on a clean tab replaces its text and stamp', () => {
+    const { opened } = make()
+    opened.add(md('a.md'))
+    opened.diskChanged('C:/work/a.md', { text: 'new', stamp: 's2' })
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ text: 'new', stamp: 's2', dirty: false, conflict: null })
+  })
+
+  it('diskChanged on a dirty tab keeps the text and records a conflict', () => {
+    const { opened } = make()
+    opened.add(md('a.md'))
+    opened.update('C:/work/a.md', { text: 'mine', dirty: true })
+    opened.diskChanged('C:/work/a.md', { text: 'theirs', stamp: 's2' })
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ text: 'mine', stamp: 's-a.md', dirty: true, conflict: { text: 'theirs', stamp: 's2' } })
+  })
+
+  it('diskChanged with the tab’s current stamp is ignored (our own save echoing back)', () => {
+    const { opened } = make()
+    opened.add(md('a.md'))
+    opened.update('C:/work/a.md', { text: 'mine', dirty: true })
+    const before = opened.getSnapshot()
+    opened.diskChanged('C:/work/a.md', { text: 'whatever', stamp: 's-a.md' })
+    expect(opened.getSnapshot()).toBe(before)
+  })
+
+  it('reloadFromDisk applies the conflict and clears dirty', () => {
+    const { opened } = make()
+    opened.add(md('a.md'))
+    opened.update('C:/work/a.md', { text: 'mine', dirty: true })
+    opened.diskChanged('C:/work/a.md', { text: 'theirs', stamp: 's2' })
+    opened.reloadFromDisk('C:/work/a.md')
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ text: 'theirs', stamp: 's2', dirty: false, conflict: null })
+  })
+
+  it('keepMine adopts the disk stamp so the next save goes through, and keeps the text', () => {
+    const { opened } = make()
+    opened.add(md('a.md'))
+    opened.update('C:/work/a.md', { text: 'mine', dirty: true })
+    opened.diskChanged('C:/work/a.md', { text: 'theirs', stamp: 's2' })
+    opened.keepMine('C:/work/a.md')
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ text: 'mine', stamp: 's2', dirty: true, conflict: null })
+  })
+
+  it('a file removed from disk is flagged and its text kept', () => {
+    const { opened } = make()
+    opened.add(md('a.md'))
+    opened.diskChanged('C:/work/a.md', { missing: true })
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ missing: true, text: '# a.md' })
+  })
+
+  it('closing the active tab activates a neighbour; closing the last leaves none', () => {
+    const { opened } = make()
+    opened.add(md('a.md')); opened.add(md('b.md')); opened.add(md('c.md'))
+    opened.close('C:/work/c.md')
+    expect(opened.getSnapshot().activePath).toBe('C:/work/b.md')
+    opened.close('C:/work/a.md'); opened.close('C:/work/b.md')
+    expect(opened.getSnapshot()).toMatchObject({ tabs: [], activePath: null })
+  })
+
+  it('JSON files still bypass the tabs', () => {
+    const { opened } = make()
+    opened.add({ name: 'x.json', text: '{}', path: 'C:\\work\\x.json', stamp: 'j' })
+    expect(opened.getSnapshot().tabs).toEqual([])
+    expect(opened.getSnapshot()).toMatchObject({ tool: 'json', source: { path: 'C:\\work\\x.json' } })
   })
 })
