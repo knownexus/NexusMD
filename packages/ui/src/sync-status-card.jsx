@@ -101,6 +101,14 @@ export function SyncStatusCard() {
     }
   };
 
+  // Retry after a failed background sync (offline, server asleep): one full round for every profile.
+  const retry = async () => {
+    setRunning({ pid: '*', kind: 'retry' });
+    try { await sync.syncNow(); }
+    catch (e) { log.warn('a sync retry failed', e); }
+    finally { refresh(); refreshSyncSummary(); setRunning(null); }
+  };
+
   const activeId = profileApi?.activeId;
   const rows = (profileApi?.profiles || []).map((p) => ({ p, s: status?.profiles?.[p.id] }));
   return (
@@ -137,7 +145,8 @@ export function SyncStatusCard() {
               </div>
               <div className="d">
                 {s?.error
-                  ? <span style={{ color: 'var(--danger, #c33)' }}>Last sync failed: {s.error}</span>
+                  ? <span style={{ color: 'var(--danger, #c33)' }}>Last sync failed: {s.error}{' '}
+                      <button className="btn sm" disabled={!!running} onClick={retry}>{running?.kind === 'retry' ? 'Retrying…' : 'Retry'}</button></span>
                   : times.length ? times.join(' · ') : 'Not synced yet'}
                 {notesOf.length > 0 && <span> · {notesOf.join(' · ')}</span>}
               </div>

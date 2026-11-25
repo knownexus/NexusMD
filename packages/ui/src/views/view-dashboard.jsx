@@ -151,10 +151,36 @@ function AddWidgetPopover({ widgetOrder, onAdd, offViews = [] }) {
   }, [open]);
 
   const allShown = hidden.length === 0;
+  const [pos, setPos] = useStateD(null);
+  const btnRef = React.useRef(null);
+
+  // Fixed-position the menu against the viewport so ancestors with overflow:hidden (the dashboard canvas) can't clip it.
+  const place = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const margin = 8, vh = window.innerHeight;
+    const below = vh - r.bottom - margin, above = r.top - margin;
+    const useBelow = below >= 200 || below >= above;
+    const room = Math.max(120, useBelow ? below : above);
+    setPos({
+      right: Math.max(margin, window.innerWidth - r.right),
+      maxHeight: room - 4,
+      ...(useBelow ? { top: r.bottom + 4 } : { bottom: vh - r.top + 4 }),
+    });
+  };
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [open]);
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <button
+        ref={btnRef}
         className="btn sm ghost"
         onClick={() => !allShown && setOpen(v => !v)}
         disabled={allShown}
@@ -164,10 +190,10 @@ function AddWidgetPopover({ widgetOrder, onAdd, offViews = [] }) {
       </button>
       {open && !allShown && (
         <div style={{
-          position: 'absolute', top: 36, right: 0, width: 280,
+          position: 'fixed', ...(pos || { top: 0, visibility: 'hidden' }), width: 280, maxWidth: 'calc(100vw - 16px)',
           background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 12, boxShadow: 'var(--shadow-pop)', zIndex: 100,
-          overflow: 'hidden',
+          overflowY: 'auto',
         }}>
           {hidden.map(id => (
             <div key={id} style={{
