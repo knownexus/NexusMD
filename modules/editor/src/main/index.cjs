@@ -12,6 +12,7 @@
 // straight to the window.
 const { withLogging } = require('@nexusmd/main-kit/with-logging');
 const files = require('./editor-files.cjs');
+const { createWatcher } = require('./editor-watch.cjs');
 
 function register(ctx) {
   const handle = withLogging(ctx.ipcMain, ctx.log);
@@ -25,6 +26,11 @@ function register(ctx) {
   handle('editor:read', (_e, p) => files.read(p));
   handle('editor:write', (_e, p, text, options) => files.write(p, text, options));
   handle('editor:list', (_e, p) => files.list(p));
+  // The Documents tabs ask for the files they have open to be watched; a change on disk is pushed to the window.
+  const watcher = createWatcher({ read: p => files.read(p), send: ctx.send });
+  const checked = paths => (Array.isArray(paths) ? paths : []).map(p => files.checkPath(p));
+  handle('editor:watch', (_e, paths) => watcher.watch(checked(paths)));
+  handle('editor:unwatch', (_e, paths) => watcher.unwatch(checked(paths)));
   // What was opened with the app before the window could be told; handed over once.
   handle('editor:take-pending', () => pending.splice(0));
 
@@ -33,7 +39,7 @@ function register(ctx) {
     if (paths.length) ctx.send('editor:open-request', paths);
   });
 
-  return { dispose: () => off?.() };
+  return { dispose: () => { off?.(); watcher.dispose(); } };
 }
 
 module.exports = { register };

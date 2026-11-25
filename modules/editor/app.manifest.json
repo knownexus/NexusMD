@@ -15,6 +15,9 @@
         "read": { "invoke": "editor:read" },
         "write": { "invoke": "editor:write" },
         "list": { "invoke": "editor:list" },
+        "watch": { "invoke": "editor:watch" },
+        "unwatch": { "invoke": "editor:unwatch" },
+        "onFileChanged": { "on": "editor:file-changed" },
         "takePending": { "invoke": "editor:take-pending" },
         "onOpenRequest": { "on": "editor:open-request" }
       }

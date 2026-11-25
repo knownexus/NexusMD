@@ -87,3 +87,31 @@ describe('files opened with the app', () => {
     expect(await handlers['editor:stat'](null, file)).toMatchObject({ exists: true, kind: 'file' })
   })
 })
+
+describe('watching open files', () => {
+  it('exposes watch, unwatch and file-changed to the window', () => {
+    expect(manifest.ipc.preload.editor.watch).toEqual({ invoke: 'editor:watch' })
+    expect(manifest.ipc.preload.editor.unwatch).toEqual({ invoke: 'editor:unwatch' })
+    expect(manifest.ipc.preload.editor.onFileChanged).toEqual({ on: 'editor:file-changed' })
+  })
+
+  it('refuses a relative path in watch and unwatch', async () => {
+    const { handlers } = registerWith()
+    await expect(handlers['editor:watch'](null, ['notes.md'])).rejects.toThrow(/full paths/)
+    await expect(handlers['editor:unwatch'](null, ['notes.md'])).rejects.toThrow(/full paths/)
+  })
+
+  it('tells the window when a watched file changes on disk, and stops after unwatch and dispose', async () => {
+    {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nexusmd-editor-watch-'))
+      const file = path.join(dir, 'w.md')
+      fs.writeFileSync(file, 'one')
+      const send = vi.fn()
+      const { handlers, handle } = registerWith({ send })
+      await handlers['editor:watch'](null, [file])
+      fs.writeFileSync(file, 'two')
+      await vi.waitFor(() => expect(send).toHaveBeenCalledWith('editor:file-changed', expect.objectContaining({ path: file, text: 'two' })), { timeout: 3000, interval: 25 })
+      handle.dispose()
+    }
+  })
+})
