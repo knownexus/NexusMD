@@ -14,6 +14,8 @@ import { useDomFind } from '../find/use-dom-find.js';
 import { useTextareaFind } from '../find/use-textarea-find.js';
 import { useNexusData } from '../data-context.jsx';
 import { pinToHome } from '../pin-shortcut.js';
+import { ToolBarRow, DocumentsBarContext } from './documents-bar.jsx';
+import { usePersisted } from '../app-components.jsx';
 import { MD_CHEAT_GROUPS, LEARN_ELEMENTS, rendererLog, ignore } from '@nexusmd/core';
 
 const log = rendererLog('documents', 'viewer')
@@ -525,46 +527,103 @@ function CheatSheetPanel({ filter, onFilterChange, learningProgress, onInsert, o
 
 // ── MarkdownToolbar ──────────────────────────────────────────────
 
-function MarkdownToolbar({ onInsert }) {
+const toolbarBtn = {
+  padding: '3px 8px', borderRadius: 4,
+  border: '1px solid transparent', background: 'transparent',
+  color: 'var(--text-muted)', fontSize: 11, fontWeight: 500,
+  cursor: 'pointer', whiteSpace: 'nowrap',
+  transition: 'background .12s, color .12s, border-color .12s',
+};
+
+// The insert buttons, grouped as the cheat sheet groups them.
+function ToolbarButtons({ onInsert }) {
+  return MD_CHEAT_GROUPS.map((group, gi) => (
+    <React.Fragment key={group.label}>
+      {gi > 0 && <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />}
+      {group.items.map(item => (
+        <button
+          key={item.label}
+          title={item.syntax}
+          onClick={() => onInsert(item)}
+          style={toolbarBtn}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'var(--bg)';
+            e.currentTarget.style.borderColor = 'var(--border)';
+            e.currentTarget.style.color = 'var(--text)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = 'transparent';
+            e.currentTarget.style.color = 'var(--text-muted)';
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </React.Fragment>
+  ));
+}
+
+// The pinned form: a bar of its own under the top bar.
+function MarkdownToolbar({ onInsert, onUnpin }) {
   return (
-    <div style={{
+    <div role="toolbar" aria-label="Formatting" style={{
       display: 'flex', alignItems: 'center', gap: 2,
       padding: '4px 8px', flexShrink: 0, flexWrap: 'wrap',
       background: 'var(--surface)', borderBottom: '1px solid var(--border)',
     }}>
-      {MD_CHEAT_GROUPS.map((group, gi) => (
-        <React.Fragment key={group.label}>
-          {gi > 0 && (
-            <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />
-          )}
-          {group.items.map(item => (
-            <button
-              key={item.label}
-              title={item.syntax}
-              onClick={() => onInsert(item)}
-              style={{
-                padding: '3px 8px', borderRadius: 4,
-                border: '1px solid transparent', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 11, fontWeight: 500,
-                cursor: 'pointer', whiteSpace: 'nowrap',
-                transition: 'background .12s, color .12s, border-color .12s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'var(--bg)';
-                e.currentTarget.style.borderColor = 'var(--border)';
-                e.currentTarget.style.color = 'var(--text)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.color = 'var(--text-muted)';
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </React.Fragment>
-      ))}
+      <ToolbarButtons onInsert={onInsert} />
+      <button style={{ ...toolbarBtn, marginLeft: 'auto' }} onClick={onUnpin} title="Put the formatting buttons back in the Format menu">Unpin</button>
+    </div>
+  );
+}
+
+// The default form: one "Format" button in the top bar that drops the buttons down, with an option to pin them as a bar.
+function FormatMenu({ onInsert, onPin }) {
+  const [open, setOpen] = useStateMD(false);
+  const [pos, setPos] = useStateMD(null);
+  const ref = useRefMD(null);
+  const btnRef = useRefMD(null);
+
+  // Positioned against the window, so the top bar's own scrolling cannot clip the panel.
+  const place = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = Math.min(460, window.innerWidth - 16);
+    setPos({ top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)), width, maxHeight: window.innerHeight - r.bottom - 16 });
+  };
+  useEffectMD(() => {
+    if (!open) return undefined;
+    place();
+    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', place);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', place);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button ref={btnRef} style={barBtnStyle} aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(o => !o)} title="Formatting buttons">
+        Format <span aria-hidden="true" style={{ fontSize: 9 }}>▾</span>
+      </button>
+      {open && (
+        <div role="toolbar" aria-label="Formatting" style={{
+          position: 'fixed', ...(pos || { top: 0, visibility: 'hidden' }), zIndex: 100, overflowY: 'auto',
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-pop)',
+          padding: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2,
+        }}>
+          <ToolbarButtons onInsert={item => { onInsert(item); setOpen(false); }} />
+          <div style={{ flexBasis: '100%', borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 6 }}>
+            <button style={toolbarBtn} onClick={() => { setOpen(false); onPin(); }} title="Keep the formatting buttons in a bar under the top bar">Pin as bar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -592,6 +651,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
 
   // Document state
   const [docs, setDocs]                 = useStateMD(() => loadDocs(KEYS.docs));
+  const { slot: inDocumentsBar } = React.useContext(DocumentsBarContext);
+  // The formatting buttons sit in a dropdown to save room; pinning turns them into a bar under the top bar.
+  const [toolbarPinned, setToolbarPinned] = usePersisted('nexusmd.markdown.toolbarPinned', false);
   const [currentDocId, setCurrentDocId] = useStateMD(newest?.id ?? null);
   const [compareDocId, setCompareDocId] = useStateMD(null);   // shown beside the open document in the Compare view
   const [compareShows, setCompareShows] = useStateMD('preview'); // the Compare pane: the other document's 'preview', or the 'diff' against it
@@ -924,6 +986,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
   useEffectMD(() => {
     const onPaste = (e) => {
       if (document.activeElement === editorRef.current) return;
+      // A paste into any other field (the find bar, a modal's name box) belongs to that field, not to the page.
+      const t = e.target;
+      if (t instanceof Element && (t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))) return;
       const text = e.clipboardData.getData("text/plain");
       if (text) {
         clearTimeout(saveTimerRef.current);
@@ -1140,8 +1205,8 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
         fontSize:      14,
       }}>
 
-        {/* TOP BAR */}
-        <div style={{
+        {/* TOP BAR: on the Documents page these controls join the page's own top bar (ToolBarRow) */}
+        <ToolBarRow style={{
           display:    "flex",
           alignItems: "center",
           gap:        10,
@@ -1152,9 +1217,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
           flexShrink: 0,
           userSelect: "none",
         }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", letterSpacing: ".02em", marginRight: 4, whiteSpace: "nowrap" }}>
+          {!inDocumentsBar && <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", letterSpacing: ".02em", marginRight: 4, whiteSpace: "nowrap" }}>
             Markdown
-          </span>
+          </span>}
 
           {/* View tabs */}
           <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: "var(--radius-sm)", padding: 3, gap: 2 }}>
@@ -1333,9 +1398,10 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
             Learn
           </button>
 
-        </div>
+          {!toolbarPinned && <FormatMenu onInsert={insertSnippet} onPin={() => setToolbarPinned(true)} />}
+        </ToolBarRow>
 
-        <MarkdownToolbar onInsert={insertSnippet} />
+        {toolbarPinned && <MarkdownToolbar onInsert={insertSnippet} onUnpin={() => setToolbarPinned(false)} />}
 
         <FindBar find={{ ...find, close: closeFind }} />
 

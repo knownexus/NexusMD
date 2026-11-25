@@ -2,7 +2,7 @@
 // heading, and nothing navigates the app window itself.
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, within, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, within, cleanup, waitFor, act } from '@testing-library/react'
 import { MarkdownViewer, slugifyHeading, addHeadingAnchors, followPreviewLink } from './MarkdownViewer.jsx'
 
 function preview(html) {
@@ -230,6 +230,25 @@ describe('MarkdownViewer find', () => {
     delete window.hljs
   })
 
+
+  it('pasting into the find bar fills the bar and leaves the document alone', () => {
+    render(<MarkdownViewer />)
+    fireEvent.change(editor(), { target: { value: 'foo bar foo' } })
+    ctrlF()
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    paste.clipboardData = { getData: () => 'canon' }
+    bar().focus()
+    act(() => { bar().dispatchEvent(paste) })
+    expect(editor().value).toBe('foo bar foo')
+  })
+
+  it('pasting outside any field still replaces the document', () => {
+    render(<MarkdownViewer />)
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    paste.clipboardData = { getData: () => 'fresh text' }
+    act(() => { document.body.dispatchEvent(paste) })
+    expect(editor().value).toBe('fresh text')
+  })
   it('Ctrl+F opens the bar, counts matches in the text and steps with Enter', () => {
     render(<MarkdownViewer />)
     fireEvent.change(editor(), { target: { value: 'foo bar foo' } })
