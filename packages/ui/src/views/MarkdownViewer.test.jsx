@@ -287,3 +287,86 @@ describe('MarkdownViewer find', () => {
     expect(document.activeElement).toBe(editor())
   })
 })
+
+describe('MarkdownViewer original files in tabs', () => {
+  const src = (extra = {}) => ({ path: 'C:/work/readme.md', name: 'readme.md', text: '# Original', stamp: 'v1', ...extra })
+  const editor = () => screen.getByPlaceholderText(/Start writing/)
+  afterEach(() => { cleanup(); localStorage.clear(); delete window.electronAPI })
+
+  it('does not report anything when a file is merely opened', () => {
+    const onSourceChange = vi.fn()
+    render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
+    expect(editor().value).toBe('# Original')
+    expect(onSourceChange).not.toHaveBeenCalled()
+  })
+
+  it('reports the text and dirty:true when the buffer is edited', () => {
+    const onSourceChange = vi.fn()
+    render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: '# Changed' } })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', dirty: true })
+  })
+
+  it('reports the new stamp and dirty:false after a successful save, and still says saved', async () => {
+    const write = vi.fn().mockResolvedValue({ ok: true, stamp: 'v2' })
+    window.electronAPI = { editor: { write } }
+    const onSourceChange = vi.fn()
+    const { rerender } = render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: '# Changed' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', stamp: 'v2', dirty: false }))
+    // The store hands the same change back as the new source: the buffer stays and nothing is reset.
+    rerender(<MarkdownViewer source={src({ text: '# Changed', stamp: 'v2' })} onSourceChange={onSourceChange} />)
+    expect(editor().value).toBe('# Changed')
+    expect(screen.queryByText(/Changed on disk/)).toBeNull()
+  })
+
+  it('a new stamp on an unedited file replaces the buffer without a banner', () => {
+    const { rerender } = render(<MarkdownViewer source={src()} onSourceChange={vi.fn()} />)
+    rerender(<MarkdownViewer source={src({ text: '# From disk', stamp: 'v2' })} onSourceChange={vi.fn()} />)
+    expect(editor().value).toBe('# From disk')
+    expect(screen.queryByText(/Changed on disk/)).toBeNull()
+  })
+
+  it('switching to another file shows its text and never writes one file’s text onto the other', () => {
+    const onSourceChange = vi.fn()
+    const a = src({ path: 'C:/work/a.md', name: 'a.md', text: 'AAA', stamp: 'a1' })
+    const b = src({ path: 'C:/work/b.md', name: 'b.md', text: 'BBB', stamp: 'b1' })
+    const { rerender } = render(<MarkdownViewer source={a} onSourceChange={onSourceChange} />)
+    rerender(<MarkdownViewer source={b} onSourceChange={onSourceChange} />)
+    expect(editor().value).toBe('BBB')
+    fireEvent.change(editor(), { target: { value: 'BBB!' } })
+    expect(onSourceChange).toHaveBeenCalledTimes(1)
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: 'BBB!', dirty: true })
+  })
+
+  it('a changed-on-disk file with unsaved edits keeps the edits and offers Reload and Keep mine', () => {
+    const onReloadFromDisk = vi.fn(); const onKeepMine = vi.fn()
+    render(<MarkdownViewer source={src({ text: 'mine', dirty: true, conflict: { text: 'theirs', stamp: 'v2' } })}
+      onSourceChange={vi.fn()} onReloadFromDisk={onReloadFromDisk} onKeepMine={onKeepMine} />)
+    expect(editor().value).toBe('mine')
+    expect(screen.getByRole('alert').textContent).toMatch(/Changed on disk/)
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    expect(onReloadFromDisk).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Keep mine' }))
+    expect(onKeepMine).toHaveBeenCalledTimes(1)
+  })
+
+  it('a file removed from disk says so, keeps the text, and Save reports it unavailable', async () => {
+    const write = vi.fn().mockResolvedValue({ ok: false, missing: true })
+    window.electronAPI = { editor: { write } }
+    render(<MarkdownViewer source={src({ missing: true })} onSourceChange={vi.fn()} />)
+    expect(screen.getByRole('alert').textContent).toMatch(/File removed — your text is kept/)
+    expect(editor().value).toBe('# Original')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.getByText(/original file is unavailable/i)).toBeTruthy())
+  })
+
+  it('editing after a disk reload is still seen as an edit', () => {
+    const onSourceChange = vi.fn()
+    const { rerender } = render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
+    rerender(<MarkdownViewer source={src({ text: '# Original', stamp: 'v2' })} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: '# Edited' } })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Edited', dirty: true })
+  })
+})

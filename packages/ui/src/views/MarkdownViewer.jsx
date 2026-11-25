@@ -632,7 +632,10 @@ function FormatMenu({ onInsert, onPin }) {
 
 // `openNewest`: start with the most recently edited saved document open (a file the app was opened with is the newest),
 // instead of a blank page. `openDocId`: open that saved document instead (a Home shortcut to it); a blank page when it is gone.
-function MarkdownViewer({ openNewest = false, openDocId = null, source = null }) {
+// `source` may carry the tab's own state (`dirty`, `conflict`, `missing`); the viewer reports edits and saves back through
+// `onSourceChange({ text?, stamp?, dirty? })` so the tab keeps them while another is shown, and asks for a disk change to be
+// taken (`onReloadFromDisk`) or set aside (`onKeepMine`).
+function MarkdownViewer({ openNewest = false, openDocId = null, source = null, onSourceChange = null, onReloadFromDisk = null, onKeepMine = null }) {
   // Documents and learning state belong to the active profile.
   const { getProfileKey } = useNexusData();
   const KEYS = React.useMemo(() => ({
@@ -690,16 +693,25 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
   // A desktop file association hands Documents a trusted path and its read
   // stamp. It is deliberately not made into a profile document: Save writes
   // straight back to that path.
+  const loadingTextRef = useRefMD(null); // the text a file was just loaded with, until the buffer shows it
+  const loadedRef = useRefMD(null);      // { path, stamp } of the file as last loaded or saved here
   useEffectMD(() => {
     sourceRef.current = source;
     if (!source?.path) return;
+    // Our own save, handed back with the stamp it made: nothing to load, and the saved state stays.
+    if (loadedRef.current?.path === source.path && loadedRef.current.stamp === source.stamp) return;
+    loadedRef.current = { path: source.path, stamp: source.stamp };
     clearTimeout(saveTimerRef.current);
     clearTimeout(createDocTimerRef.current);
-    isLoadingDoc.current = true;
+    const text = source.text ?? '';
+    // Only a load that changes the buffer is "not an edit"; one that leaves it as it is would leave the flag set for the next real edit.
+    const changes = text !== markdownRef.current || currentDocId !== null;
+    isLoadingDoc.current = changes;
+    loadingTextRef.current = text !== markdownRef.current ? text : null;
     setCurrentDocId(null);
-    setMarkdown(source.text ?? '');
+    setMarkdown(text);
     setExternalSaveError('');
-    setSaveStatus('');
+    setSaveStatus(source.dirty ? 'unsaved' : '');
     setAutosaveMs(Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0);
   }, [source?.path, source?.stamp]);
 
@@ -718,6 +730,14 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
 
   // Keep markdownRef in sync for use inside async timer callbacks
   useEffectMD(() => { markdownRef.current = markdown; }, [markdown]);
+
+  // An original file that is edited tells its tab, so the edits survive switching to another file.
+  useEffectMD(() => {
+    const open = sourceRef.current;
+    if (!open?.path || !onSourceChange) return;
+    if (loadingTextRef.current !== null) { if (markdown === loadingTextRef.current) loadingTextRef.current = null; return; }
+    if (markdown !== (open.text ?? '')) onSourceChange({ text: markdown, dirty: true });
+  }, [markdown]);
 
   // Persist learnMode to localStorage
   useEffectMD(() => { localStorage.setItem(KEYS.learn, learnMode); }, [learnMode]);
@@ -833,7 +853,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
       try {
         const result = await api.write(openSource.path, markdownRef.current, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
         if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
-        sourceRef.current = { ...openSource, stamp: result.stamp };
+        sourceRef.current = { ...openSource, stamp: result.stamp, text: markdownRef.current };
+        loadedRef.current = { path: openSource.path, stamp: result.stamp };
+        onSourceChange?.({ text: markdownRef.current, stamp: result.stamp, dirty: false });
         setSaveStatus('saved');
       } catch (err) { log.warn('saving the original file failed', err); setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
       return;
@@ -1400,6 +1422,22 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
 
           {!toolbarPinned && <FormatMenu onInsert={insertSnippet} onPin={() => setToolbarPinned(true)} />}
         </ToolBarRow>
+
+        {source?.path && (source.conflict || source.missing) && (
+          <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', fontSize: 12, flexShrink: 0, background: 'var(--accent-soft)', borderBottom: '1px solid var(--accent-border)', color: 'var(--text)' }}>
+            {source.conflict
+              ? <><span>Changed on disk. Your unsaved edits are still here.</span>
+                  <button style={barBtnStyle} onClick={onReloadFromDisk} title="Replace what is here with the file as it is now">Reload</button>
+                  <button style={barBtnStyle} onClick={onKeepMine} title="Keep your edits; the next save writes them over the file">Keep mine</button></>
+              : <span>File removed — your text is kept.</span>}
+          </div>
+        )}
+
+        {externalSaveError && (
+          <div role="alert" style={{ padding: '6px 14px', fontSize: 12, flexShrink: 0, background: 'var(--danger-soft, var(--accent-soft))', borderBottom: '1px solid var(--border)', color: 'var(--danger, var(--text))' }}>
+            {externalSaveError}
+          </div>
+        )}
 
         {toolbarPinned && <MarkdownToolbar onInsert={insertSnippet} onUnpin={() => setToolbarPinned(false)} />}
 
