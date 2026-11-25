@@ -159,6 +159,13 @@ export function makeNativeBinding({ provider, suffix }) {
         return next.accessToken
       } catch (err) {
         log.error(`${provider} token refresh failed`, err)
+        // Access was revoked or the refresh token expired (the IPC layer keeps only the message): the stored
+        // tokens can never work again, so forget them and let the app ask the user to sign in again.
+        if (err?.code === 'invalid_grant' || /invalid_grant/.test(String(err?.message || ''))) {
+          await clear(suffix)
+          window.dispatchEvent(new Event('nexusmd:cloud-auth-changed'))
+          return null
+        }
         return force ? null : auth.accessToken
       }
     },
