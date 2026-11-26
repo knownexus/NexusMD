@@ -10,15 +10,17 @@ import { getProfileKey } from '@nexusmd/shell-sdk'
 // (or, for `openDoc`, the one named by `docId`).
 const STORE_KEYS = { markdown: 'md_documents', json: 'json_editor_documents' }
 export function createOpenedFiles({ storage = globalThis.localStorage, profileKey = getProfileKey } = {}) {
-  let snapshot = { count: 0, tool: 'markdown', docId: null, tabs: [], activePath: null }
+  // `viewing` says what `source` is: 'tab' (the active tab) or 'other' (a JSON file or a saved document, which tabs changing leave alone).
+  let snapshot = { count: 0, tool: 'markdown', docId: null, tabs: [], activePath: null, viewing: 'other' }
   const listeners = new Set()
   const emit = (next) => { snapshot = next; listeners.forEach(fn => fn()) }
   // One file, however it is spelled: slashes and case do not tell two paths apart on Windows.
   const keyOf = path => String(path).replace(/\\/g, '/').toLowerCase()
   const indexOfTab = (path) => snapshot.tabs.findIndex(t => keyOf(t.path) === keyOf(path))
-  const withTabs = (tabs, activePath = snapshot.activePath) => ({
-    ...snapshot, tabs, activePath, source: tabs.find(t => t.path === activePath) ?? null,
-  })
+  const withTabs = (tabs, activePath = snapshot.activePath, over = {}) => {
+    const next = { ...snapshot, ...over, tabs, activePath }
+    return { ...next, source: next.viewing === 'tab' ? tabs.find(t => t.path === activePath) ?? null : next.source }
+  }
   const patchTab = (path, fn) => {
     const i = indexOfTab(path)
     if (i < 0) return
@@ -46,24 +48,25 @@ export function createOpenedFiles({ storage = globalThis.localStorage, profileKe
         // Opened again: the tab that is already there is shown, with the file's current text when it has no unsaved edits.
         const kept = known ? (known.dirty ? { ...known, conflict: known.stamp !== tab.stamp ? { text: tab.text, stamp: tab.stamp } : known.conflict } : { ...known, ...tab, path: known.path, name: known.name }) : tab
         const tabs = known ? snapshot.tabs.map((t, j) => (j === i ? kept : t)) : [...snapshot.tabs, kept]
-        emit({ ...withTabs(tabs, kept.path), count: snapshot.count + 1, tool, docId: null })
+        emit(withTabs(tabs, kept.path, { count: snapshot.count + 1, tool, docId: null, viewing: 'tab' }))
         return { tool, source: kept, created: false, name: documentNameOf(file.name) }
       }
       if (file?.path) {
         const source = { path: file.path, name: file.name, text: String(file.text ?? ''), stamp: file.stamp ?? null, bom: !!file.bom }
-        emit({ ...snapshot, count: snapshot.count + 1, tool, docId: null, source })
+        emit({ ...snapshot, count: snapshot.count + 1, tool, docId: null, source, viewing: 'other' })
         return { tool, source, created: false, name: documentNameOf(file.name) }
       }
       const result = tool === 'json'
         ? addOpenedJsonDocument(storage, file, { key: profileKey('json_editor_documents') })
         : addOpenedDocument(storage, file, { key: profileKey('md_documents') })
-      emit({ ...snapshot, count: snapshot.count + 1, tool, docId: null, source: undefined })
+      emit({ ...snapshot, count: snapshot.count + 1, tool, docId: null, source: undefined, viewing: 'other' })
       return { tool, ...result, name: documentNameOf(file.name) }
     },
     /** Shows the tab for a path. */
     activate(path) {
       const t = snapshot.tabs[indexOfTab(path)]
-      if (t && t.path !== snapshot.activePath) emit({ ...withTabs(snapshot.tabs, t.path), count: snapshot.count + 1, tool: 'markdown', docId: null })
+      // Shown again even when it is the active one: the person may have been in another tool or on a saved document since.
+      if (t) emit(withTabs(snapshot.tabs, t.path, { count: snapshot.count + 1, tool: 'markdown', docId: null, viewing: 'tab' }))
     },
     /** Closes a tab; the one beside it is shown (none when it was the last). */
     close(path) {
@@ -76,7 +79,12 @@ export function createOpenedFiles({ storage = globalThis.localStorage, profileKe
     },
     /** What the viewer reports about a tab: { text, stamp, dirty } after an edit or a save. */
     update(path, patch) {
-      patchTab(path, t => ({ ...t, ...patch }))
+      patchTab(path, (t) => {
+        const { savedText, ...rest } = patch
+        // A save reports the text it wrote: edits made while it ran keep the tab unsaved, and a conflict at the stamp it made is our own.
+        if (savedText !== undefined) return { ...t, ...rest, dirty: t.text !== savedText, conflict: t.conflict?.stamp === rest.stamp ? null : t.conflict }
+        return { ...t, ...rest }
+      })
     },
     /** The file changed on disk: { text, stamp }, or { missing: true } when it is gone. */
     diskChanged(path, change) {
@@ -99,7 +107,7 @@ export function createOpenedFiles({ storage = globalThis.localStorage, profileKe
     openDoc({ tool, docId } = {}) {
       const key = STORE_KEYS[tool]
       if (!key || !savedDocIds(storage.getItem(profileKey(key))).some(d => d.id === docId)) return { ok: false }
-      emit({ ...snapshot, count: snapshot.count + 1, tool, docId, source: undefined })
+      emit({ ...snapshot, count: snapshot.count + 1, tool, docId, source: undefined, viewing: 'other' })
       return { ok: true }
     },
   }

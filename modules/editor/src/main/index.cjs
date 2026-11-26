@@ -32,11 +32,16 @@ function register(ctx) {
   handle('editor:watch', (_e, paths) => watcher.watch(checked(paths)));
   handle('editor:unwatch', (_e, paths) => watcher.unwatch(checked(paths)));
   // What was opened with the app before the window could be told; handed over once.
-  handle('editor:take-pending', () => pending.splice(0));
+  // Until then the window is not listening, so files from other launches in the meantime (ten files opened at once start ten
+  // launches) join the queue instead of being pushed to a window that would drop them.
+  let windowReady = false;
+  handle('editor:take-pending', () => { windowReady = true; return pending.splice(0); });
 
   const off = ctx.onSecondInstance?.(argv => {
     const paths = files.pathsFromArgv(argvOf(argv));
-    if (paths.length) ctx.send('editor:open-request', paths);
+    if (!paths.length) return;
+    if (windowReady) ctx.send('editor:open-request', paths);
+    else pending.push(...paths);
   });
 
   return { dispose: () => { off?.(); watcher.dispose(); } };

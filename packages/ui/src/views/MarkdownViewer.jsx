@@ -643,6 +643,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
     learn: getProfileKey(LEARN_MODE_KEY), progress: getProfileKey(PROGRESS_KEY),
   }), [getProfileKey]);
   const [newest] = useStateMD(() => {
+    if (source?.path) return null // a file that comes with a path is what is shown, not a saved document
     if (openDocId) return loadDocs(KEYS.docs).find(d => d.id === openDocId) ?? null;
     return openNewest ? [...loadDocs(KEYS.docs)].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] ?? null : null;
   });
@@ -681,7 +682,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
   const saveTimerRef       = useRefMD(null);
   const createDocTimerRef  = useRefMD(null);
   const saveStatusTimerRef = useRefMD(null);
-  const markdownRef        = useRefMD('');
+  const markdownRef        = useRefMD(newest?.content ?? '');
   const isLoadingDoc       = useRefMD(!!newest); // a document opened at the start is not an edit, so it is not saved again
   const sourceRef          = useRefMD(source);
   const [externalSaveError, setExternalSaveError] = useStateMD('');
@@ -694,13 +695,14 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
   // stamp. It is deliberately not made into a profile document: Save writes
   // straight back to that path.
   const loadingTextRef = useRefMD(null); // the text a file was just loaded with, until the buffer shows it
-  const loadedRef = useRefMD(null);      // { path, stamp } of the file as last loaded or saved here
+  // { path, stamp, text } of the file as last loaded or saved here; text is null for a file loaded with unsaved edits (it stays unsaved).
+  const loadedRef = useRefMD(null);
+  sourceRef.current = source; // the tab on screen, whatever a save that is still running was started for
   useEffectMD(() => {
-    sourceRef.current = source;
     if (!source?.path) return;
     // Our own save, handed back with the stamp it made: nothing to load, and the saved state stays.
     if (loadedRef.current?.path === source.path && loadedRef.current.stamp === source.stamp) return;
-    loadedRef.current = { path: source.path, stamp: source.stamp };
+    loadedRef.current = { path: source.path, stamp: source.stamp, text: source.dirty ? null : (source.text ?? '') };
     clearTimeout(saveTimerRef.current);
     clearTimeout(createDocTimerRef.current);
     const text = source.text ?? '';
@@ -734,9 +736,12 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
   // An original file that is edited tells its tab, so the edits survive switching to another file.
   useEffectMD(() => {
     const open = sourceRef.current;
-    if (!open?.path || !onSourceChange) return;
+    const loaded = loadedRef.current;
+    if (!open?.path || !onSourceChange || loaded?.path !== open.path) return;
     if (loadingTextRef.current !== null) { if (markdown === loadingTextRef.current) loadingTextRef.current = null; return; }
-    if (markdown !== (open.text ?? '')) onSourceChange({ text: markdown, dirty: true }, open.path);
+    // Dirty against what was last loaded or saved, so typing a character and deleting it again leaves the tab clean.
+    const dirty = loaded.text === null || markdown !== loaded.text;
+    if (markdown !== (open.text ?? '') || dirty !== !!open.dirty) onSourceChange({ text: markdown, dirty }, open.path);
   }, [markdown]);
 
   // Persist learnMode to localStorage
@@ -850,14 +855,18 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null, o
       const api = window.electronAPI?.editor;
       if (!api?.write) { setExternalSaveError('This file cannot be saved from this platform.'); return; }
       setSaveStatus('saving'); setExternalSaveError('');
+      const written = markdownRef.current; // what this save writes; the buffer may move on, or another tab be shown, before it finishes
+      const here = () => sourceRef.current?.path === openSource.path;
       try {
-        const result = await api.write(openSource.path, markdownRef.current, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
-        if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
-        sourceRef.current = { ...openSource, stamp: result.stamp, text: markdownRef.current };
-        loadedRef.current = { path: openSource.path, stamp: result.stamp };
-        onSourceChange?.({ text: markdownRef.current, stamp: result.stamp, dirty: false }, openSource.path);
-        setSaveStatus('saved');
-      } catch (err) { log.warn('saving the original file failed', err); setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
+        const result = await api.write(openSource.path, written, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
+        if (!result?.ok) { if (here()) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); } return; }
+        // The tab learns what was written whichever tab is shown; the buffer and the status change only if it is still this file's.
+        onSourceChange?.({ stamp: result.stamp, savedText: written }, openSource.path);
+        if (here()) {
+          loadedRef.current = { path: openSource.path, stamp: result.stamp, text: written };
+          setSaveStatus(markdownRef.current === written ? 'saved' : 'unsaved');
+        }
+      } catch (err) { log.warn('saving the original file failed', err); if (here()) { setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); } }
       return;
     }
     if (!markdownRef.current) return;

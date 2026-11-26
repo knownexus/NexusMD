@@ -307,14 +307,14 @@ describe('MarkdownViewer original files in tabs', () => {
     expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', dirty: true }, 'C:/work/readme.md')
   })
 
-  it('reports the new stamp and dirty:false after a successful save, and still says saved', async () => {
+  it('reports the new stamp and the text it wrote after a successful save, and still says saved', async () => {
     const write = vi.fn().mockResolvedValue({ ok: true, stamp: 'v2' })
     window.electronAPI = { editor: { write } }
     const onSourceChange = vi.fn()
     const { rerender } = render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
     fireEvent.change(editor(), { target: { value: '# Changed' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Changed', stamp: 'v2', dirty: false }, 'C:/work/readme.md'))
+    await waitFor(() => expect(onSourceChange).toHaveBeenLastCalledWith({ stamp: 'v2', savedText: '# Changed' }, 'C:/work/readme.md'))
     // The store hands the same change back as the new source: the buffer stays and nothing is reset.
     rerender(<MarkdownViewer source={src({ text: '# Changed', stamp: 'v2' })} onSourceChange={onSourceChange} />)
     expect(editor().value).toBe('# Changed')
@@ -368,5 +368,62 @@ describe('MarkdownViewer original files in tabs', () => {
     rerender(<MarkdownViewer source={src({ text: '# Original', stamp: 'v2' })} onSourceChange={onSourceChange} />)
     fireEvent.change(editor(), { target: { value: '# Edited' } })
     expect(onSourceChange).toHaveBeenLastCalledWith({ text: '# Edited', dirty: true }, 'C:/work/readme.md')
+  })
+
+  it('a save that finishes after another tab was shown leaves that tab and its text alone', async () => {
+    let finish
+    const write = vi.fn(() => new Promise(r => { finish = r }))
+    window.electronAPI = { editor: { write } }
+    const onSourceChange = vi.fn()
+    const a = src({ path: 'C:/work/a.md', name: 'a.md', text: 'AAA', stamp: 'a1' })
+    const b = src({ path: 'C:/work/b.md', name: 'b.md', text: 'BBB', stamp: 'b1' })
+    const { rerender } = render(<MarkdownViewer source={a} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: 'AAA edited' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    rerender(<MarkdownViewer source={b} onSourceChange={onSourceChange} />)
+    await act(async () => { finish({ ok: true, stamp: 'a2' }) })
+    // The tab saved is told what was written to it, never the other tab's text.
+    expect(onSourceChange).toHaveBeenCalledWith({ stamp: 'a2', savedText: 'AAA edited' }, 'C:/work/a.md')
+    expect(editor().value).toBe('BBB')
+    // Typing in B is reported to B, and saving B writes B's text to B's file.
+    fireEvent.change(editor(), { target: { value: 'BBB typed' } })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: 'BBB typed', dirty: true }, 'C:/work/b.md')
+    write.mockResolvedValueOnce({ ok: true, stamp: 'b2' })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+    expect(write.mock.calls[1].slice(0, 2)).toEqual(['C:/work/b.md', 'BBB typed'])
+  })
+
+  it('edits typed while a save runs stay unsaved', async () => {
+    let finish
+    const write = vi.fn(() => new Promise(r => { finish = r }))
+    window.electronAPI = { editor: { write } }
+    const onSourceChange = vi.fn()
+    render(<MarkdownViewer source={src()} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: 'one' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    fireEvent.change(editor(), { target: { value: 'one two' } })
+    await act(async () => { finish({ ok: true, stamp: 'v2' }) })
+    expect(write.mock.calls[0][1]).toBe('one')
+    expect(onSourceChange).toHaveBeenCalledWith({ stamp: 'v2', savedText: 'one' }, 'C:/work/readme.md')
+    expect(onSourceChange).toHaveBeenCalledWith({ text: 'one two', dirty: true }, 'C:/work/readme.md')
+  })
+
+  it('an empty file opened over a saved document shows nothing and reports nothing', () => {
+    localStorage.setItem('md_documents', JSON.stringify({ docs: [{ id: 'p', name: 'Profile doc', autoName: 'P', content: 'PROFILE DOC TEXT', createdAt: 1, updatedAt: 5 }] }))
+    const onSourceChange = vi.fn()
+    render(<MarkdownViewer openNewest source={src({ path: 'C:/work/empty.md', name: 'empty.md', text: '' })} onSourceChange={onSourceChange} />)
+    expect(editor().value).toBe('')
+    expect(onSourceChange).not.toHaveBeenCalled()
+  })
+
+  it('typing a character and deleting it again leaves the tab as it was loaded', () => {
+    const onSourceChange = vi.fn()
+    const { rerender } = render(<MarkdownViewer source={src({ text: 'hello' })} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: 'hello!' } })
+    // The store hands the edit back as the tab's state.
+    rerender(<MarkdownViewer source={src({ text: 'hello!', dirty: true })} onSourceChange={onSourceChange} />)
+    fireEvent.change(editor(), { target: { value: 'hello' } })
+    expect(onSourceChange).toHaveBeenLastCalledWith({ text: 'hello', dirty: false }, 'C:/work/readme.md')
   })
 })

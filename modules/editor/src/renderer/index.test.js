@@ -75,14 +75,27 @@ describe('files the app is opened with', () => {
     await Promise.resolve(); await Promise.resolve()
     expect(host.navigate).not.toHaveBeenCalled()
   })
-  it('opens files from a later launch as they arrive', () => {
+  it('opens files from a later launch as they arrive', async () => {
     const api = bridge([])
     const host = hostWith()
     editor.activate(host)
+    await vi.waitFor(() => expect(api.takePending).toHaveBeenCalled())
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
     const [listener] = api.onOpenRequest.mock.calls[0]
     listener(['/later.txt'])
     expect(editorStore.openPath).toHaveBeenCalledWith('/later.txt')
     expect(host.navigate).toHaveBeenCalledWith('editor')
+  })
+  it('opens the launch files before a request that arrived while they were being fetched', async () => {
+    let release
+    const api = { takePending: vi.fn(() => new Promise(r => { release = r })), onOpenRequest: vi.fn() }
+    window.electronAPI = { editor: api }
+    editor.activate(hostWith())
+    api.onOpenRequest.mock.calls[0][0](['/second.txt'])
+    expect(editorStore.openPath).not.toHaveBeenCalled()
+    release(['/first.txt'])
+    await vi.waitFor(() => expect(editorStore.openPath).toHaveBeenCalledTimes(2))
+    expect(editorStore.openPath.mock.calls.map(c => c[0])).toEqual(['/first.txt', '/second.txt'])
   })
   it('stays out of it in a pop-out window, which is not the app', () => {
     const api = bridge(['/a.txt'])

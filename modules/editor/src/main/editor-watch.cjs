@@ -19,11 +19,18 @@ function createWatcher({ read, send, debounceMs = 150, fsWatch = fs.watch }) {
   function attach(path, entry) {
     try {
       entry.handle = fsWatch(path, { persistent: false }, () => schedule(path));
-      entry.handle.on?.('error', (err) => ignore(modLog, 'a file watch reported an error; the next event or retry recovers', err));
+      entry.handle.on?.('error', (err) => {
+        ignore(modLog, 'a file watch reported an error; watching again and checking the file', err);
+        if (entries.get(path) !== entry) return;
+        try { entry.handle?.close(); } catch (e) { ignore(modLog, 'closing a file watch that already failed', e); }
+        entry.handle = null;
+        attach(path, entry);
+        schedule(path);
+      });
     } catch (err) {
       ignore(modLog, 'watching a file that may be mid-replace; tried again shortly', err);
       entry.handle = null;
-      entry.retry = setTimeout(() => { entry.retry = null; if (entries.get(path) === entry) attach(path, entry); }, RETRY_MS);
+      entry.retry = setTimeout(() => { entry.retry = null; if (entries.get(path) !== entry) return; attach(path, entry); if (entry.handle) schedule(path); }, RETRY_MS); // once watchable again, read it: it may have come back changed
     }
   }
 

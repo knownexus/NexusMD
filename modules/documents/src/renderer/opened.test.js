@@ -232,4 +232,41 @@ describe('tabs for path-backed Markdown files', () => {
     expect(opened.getSnapshot().tabs).toEqual([])
     expect(opened.getSnapshot()).toMatchObject({ tool: 'json', source: { path: 'C:\\work\\x.json' } })
   })
+
+  it('tabs changing leave a JSON file that is showing alone', () => {
+    const { opened } = make()
+    opened.add({ name: 'a.md', text: 'A', path: 'C:/work/a.md', stamp: 'a1' })
+    opened.add({ name: 'x.json', text: '{}', path: 'C:/work/x.json', stamp: 'j' })
+    opened.diskChanged('C:/work/a.md', { text: 'A2', stamp: 'a2' })
+    expect(opened.getSnapshot()).toMatchObject({ tool: 'json', source: { path: 'C:/work/x.json' } })
+    opened.close('C:/work/a.md')
+    expect(opened.getSnapshot()).toMatchObject({ tool: 'json', source: { path: 'C:/work/x.json' } })
+  })
+
+  it('showing the active tab again emits, so it can be shown after another tool or document', () => {
+    const { opened } = make()
+    opened.add({ name: 'a.md', text: 'A', path: 'C:/work/a.md', stamp: 'a1' })
+    const before = opened.getSnapshot().count
+    opened.activate('C:/work/a.md')
+    expect(opened.getSnapshot().count).toBe(before + 1)
+  })
+
+  it('a Markdown file without a path is not replaced by a tab when a tab changes on disk', () => {
+    const { opened } = make()
+    opened.add({ name: 'a.md', text: 'A', path: 'C:/work/a.md', stamp: 'a1' })
+    opened.add({ name: 'loose.md', text: 'L' })
+    expect(opened.getSnapshot().source).toBeUndefined()
+    opened.diskChanged('C:/work/a.md', { text: 'A2', stamp: 'a2' })
+    expect(opened.getSnapshot().source).toBeUndefined()
+  })
+
+  it('a save reports what it wrote: edits made meanwhile keep the tab unsaved', () => {
+    const { opened } = make()
+    opened.add({ name: 'a.md', text: 'one', path: 'C:/work/a.md', stamp: 'a1' })
+    opened.update('C:/work/a.md', { text: 'one two', dirty: true })
+    opened.update('C:/work/a.md', { stamp: 'a2', savedText: 'one' })
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ text: 'one two', stamp: 'a2', dirty: true })
+    opened.update('C:/work/a.md', { stamp: 'a3', savedText: 'one two' })
+    expect(opened.getSnapshot().tabs[0]).toMatchObject({ stamp: 'a3', dirty: false })
+  })
 })

@@ -99,4 +99,21 @@ describe('editor file watcher', () => {
     expect(fsx.live(FILE)).toHaveLength(1)
     w.dispose()
   })
+
+  it('reads the file once it can be watched again after being deleted and recreated', async () => {
+    let fail = false
+    const fsWatch = vi.fn((path, o, l) => { if (fail) throw Object.assign(new Error('gone'), { code: 'ENOENT' }); return fsx.fsWatch(path, o, l) })
+    const w = make({ fsWatch })
+    w.watch([FILE])
+    read.mockResolvedValueOnce({ missing: true })
+    fail = true
+    fsx.live(FILE)[0].listener('rename')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(send).toHaveBeenCalledWith('editor:file-changed', { path: FILE, missing: true })
+    fail = false
+    read.mockResolvedValue({ text: 'back', stamp: 's9', bom: false })
+    await vi.advanceTimersByTimeAsync(1300)
+    expect(send).toHaveBeenLastCalledWith('editor:file-changed', { path: FILE, text: 'back', stamp: 's9', bom: false })
+    w.dispose()
+  })
 })

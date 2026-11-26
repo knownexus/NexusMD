@@ -52,17 +52,29 @@ describe('files opened with the app', () => {
     expect(await handlers['editor:take-pending']()).toEqual([file])
     let listener
     const send = vi.fn()
-    registerWith({ defaultApp: true, send, argv: ['electron.exe', dir], onSecondInstance: fn => { listener = fn; return () => {} } })
+    const second = registerWith({ defaultApp: true, send, argv: ['electron.exe', dir], onSecondInstance: fn => { listener = fn; return () => {} } })
+    await second.handlers['editor:take-pending']()
     listener(['electron.exe', dir])
     expect(send).not.toHaveBeenCalled()
     listener(['electron.exe', dir, file])
     expect(send).toHaveBeenCalledWith('editor:open-request', [file])
   })
 
-  it('pushes files from a later launch straight to the window', () => {
+  it('queues files from launches that arrive before the window is listening, in order', async () => {
     let listener
     const send = vi.fn()
-    registerWith({ send, argv: ['NexusMD.exe'], onSecondInstance: fn => { listener = fn; return () => {} } })
+    const { handlers } = registerWith({ send, argv: ['NexusMD.exe', file], onSecondInstance: fn => { listener = fn; return () => {} } })
+    const other = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'nexusmd-editor-second-')), 'b.txt'); fs.writeFileSync(other, 'y')
+    listener(['NexusMD.exe', other])
+    expect(send).not.toHaveBeenCalled()
+    expect(await handlers['editor:take-pending']()).toEqual([file, other])
+  })
+
+  it('pushes files from a later launch straight to the window once it has asked', async () => {
+    let listener
+    const send = vi.fn()
+    const { handlers } = registerWith({ send, argv: ['NexusMD.exe'], onSecondInstance: fn => { listener = fn; return () => {} } })
+    await handlers['editor:take-pending']()
     listener(['NexusMD.exe', file])
     expect(send).toHaveBeenCalledWith('editor:open-request', [file])
     send.mockClear()

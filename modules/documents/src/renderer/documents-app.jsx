@@ -8,14 +8,14 @@ import { openedFiles } from './opened.js'
 // own edits, and the screen is not started again as they come and go.
 // A Home shortcut to a saved document does the same on that document.
 export function DocumentsApp() {
-  const { count, tool, docId, source = null, tabs = [], activePath = null } = React.useSyncExternalStore(openedFiles.subscribe, openedFiles.getSnapshot)
+  const { count, tool, docId, source = null, tabs = [], activePath = null, viewing } = React.useSyncExternalStore(openedFiles.subscribe, openedFiles.getSnapshot)
   const closeTab = (path) => {
     const tab = tabs.find(t => t.path === path)
     if (tab?.dirty && !window.confirm(`Close ${tab.name}? Its unsaved changes will be lost.`)) return
     openedFiles.close(path)
   }
   const view = (
-    <DocumentsView key={tabs.length ? 'tabs' : count} opened={count} openedTool={tool} openedSource={source} openDocId={docId}
+    <DocumentsView key={tabs.length && viewing === 'tab' ? 'tabs' : count} opened={count} openedTool={tool} openedSource={source} openDocId={docId}
       onSourceChange={(patch, path) => openedFiles.update(path, patch)}
       onReloadFromDisk={() => activePath && openedFiles.reloadFromDisk(activePath)}
       onKeepMine={() => activePath && openedFiles.keepMine(activePath)} />
