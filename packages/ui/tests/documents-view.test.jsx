@@ -120,10 +120,13 @@ describe('DocumentsBar', () => {
     expect(getByRole('tab', { name: 'Markdown' }).getAttribute('aria-selected')).toBe('false')
   })
 
-  it('is a 48px bar, not the accent-filled button row', () => {
+  it('is a bar at least 48px tall whose tool controls wrap instead of scrolling, not the accent-filled button row', () => {
     const { container } = renderDocuments()
     const bar = container.querySelector('.nx-docs-bar')
-    expect(bar.style.height).toBe('48px')
+    expect(bar.style.minHeight).toBe('48px')
+    const slot = bar.querySelector('.nx-docs-slot')
+    expect(slot.style.flexWrap).toBe('wrap')
+    expect(slot.style.overflowX).toBe('')
     expect(bar.querySelector('[role="tablist"] button[style*="var(--accent)"]')).toBeNull()
   })
 
