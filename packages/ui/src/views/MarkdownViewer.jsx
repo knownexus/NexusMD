@@ -14,6 +14,8 @@ import { useDomFind } from '../find/use-dom-find.js';
 import { useTextareaFind } from '../find/use-textarea-find.js';
 import { useNexusData } from '../data-context.jsx';
 import { pinToHome } from '../pin-shortcut.js';
+import { ToolBarRow, DocumentsBarContext } from './documents-bar.jsx';
+import { usePersisted } from '../app-components.jsx';
 import { MD_CHEAT_GROUPS, LEARN_ELEMENTS, rendererLog, ignore } from '@nexusmd/core';
 
 const log = rendererLog('documents', 'viewer')
@@ -525,46 +527,103 @@ function CheatSheetPanel({ filter, onFilterChange, learningProgress, onInsert, o
 
 // ── MarkdownToolbar ──────────────────────────────────────────────
 
-function MarkdownToolbar({ onInsert }) {
+const toolbarBtn = {
+  padding: '3px 8px', borderRadius: 4,
+  border: '1px solid transparent', background: 'transparent',
+  color: 'var(--text-muted)', fontSize: 11, fontWeight: 500,
+  cursor: 'pointer', whiteSpace: 'nowrap',
+  transition: 'background .12s, color .12s, border-color .12s',
+};
+
+// The insert buttons, grouped as the cheat sheet groups them.
+function ToolbarButtons({ onInsert }) {
+  return MD_CHEAT_GROUPS.map((group, gi) => (
+    <React.Fragment key={group.label}>
+      {gi > 0 && <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />}
+      {group.items.map(item => (
+        <button
+          key={item.label}
+          title={item.syntax}
+          onClick={() => onInsert(item)}
+          style={toolbarBtn}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'var(--bg)';
+            e.currentTarget.style.borderColor = 'var(--border)';
+            e.currentTarget.style.color = 'var(--text)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.borderColor = 'transparent';
+            e.currentTarget.style.color = 'var(--text-muted)';
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </React.Fragment>
+  ));
+}
+
+// The pinned form: a bar of its own under the top bar.
+function MarkdownToolbar({ onInsert, onUnpin }) {
   return (
-    <div style={{
+    <div role="toolbar" aria-label="Formatting" style={{
       display: 'flex', alignItems: 'center', gap: 2,
       padding: '4px 8px', flexShrink: 0, flexWrap: 'wrap',
       background: 'var(--surface)', borderBottom: '1px solid var(--border)',
     }}>
-      {MD_CHEAT_GROUPS.map((group, gi) => (
-        <React.Fragment key={group.label}>
-          {gi > 0 && (
-            <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />
-          )}
-          {group.items.map(item => (
-            <button
-              key={item.label}
-              title={item.syntax}
-              onClick={() => onInsert(item)}
-              style={{
-                padding: '3px 8px', borderRadius: 4,
-                border: '1px solid transparent', background: 'transparent',
-                color: 'var(--text-muted)', fontSize: 11, fontWeight: 500,
-                cursor: 'pointer', whiteSpace: 'nowrap',
-                transition: 'background .12s, color .12s, border-color .12s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'var(--bg)';
-                e.currentTarget.style.borderColor = 'var(--border)';
-                e.currentTarget.style.color = 'var(--text)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'transparent';
-                e.currentTarget.style.color = 'var(--text-muted)';
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </React.Fragment>
-      ))}
+      <ToolbarButtons onInsert={onInsert} />
+      <button style={{ ...toolbarBtn, marginLeft: 'auto' }} onClick={onUnpin} title="Put the formatting buttons back in the Format menu">Unpin</button>
+    </div>
+  );
+}
+
+// The default form: one "Format" button in the top bar that drops the buttons down, with an option to pin them as a bar.
+function FormatMenu({ onInsert, onPin }) {
+  const [open, setOpen] = useStateMD(false);
+  const [pos, setPos] = useStateMD(null);
+  const ref = useRefMD(null);
+  const btnRef = useRefMD(null);
+
+  // Positioned against the window, so the top bar's own scrolling cannot clip the panel.
+  const place = () => {
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = Math.min(460, window.innerWidth - 16);
+    setPos({ top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)), width, maxHeight: window.innerHeight - r.bottom - 16 });
+  };
+  useEffectMD(() => {
+    if (!open) return undefined;
+    place();
+    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', place);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', place);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button ref={btnRef} style={barBtnStyle} aria-haspopup="true" aria-expanded={open} onClick={() => setOpen(o => !o)} title="Formatting buttons">
+        Format <span aria-hidden="true" style={{ fontSize: 9 }}>▾</span>
+      </button>
+      {open && (
+        <div role="toolbar" aria-label="Formatting" style={{
+          position: 'fixed', ...(pos || { top: 0, visibility: 'hidden' }), zIndex: 100, overflowY: 'auto',
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-pop)',
+          padding: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2,
+        }}>
+          <ToolbarButtons onInsert={item => { onInsert(item); setOpen(false); }} />
+          <div style={{ flexBasis: '100%', borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 6 }}>
+            <button style={toolbarBtn} onClick={() => { setOpen(false); onPin(); }} title="Keep the formatting buttons in a bar under the top bar">Pin as bar</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -573,7 +632,10 @@ function MarkdownToolbar({ onInsert }) {
 
 // `openNewest`: start with the most recently edited saved document open (a file the app was opened with is the newest),
 // instead of a blank page. `openDocId`: open that saved document instead (a Home shortcut to it); a blank page when it is gone.
-function MarkdownViewer({ openNewest = false, openDocId = null, source = null }) {
+// `source` may carry the tab's own state (`dirty`, `conflict`, `missing`); the viewer reports edits and saves back through
+// `onSourceChange({ text?, stamp?, dirty? })` so the tab keeps them while another is shown, and asks for a disk change to be
+// taken (`onReloadFromDisk`) or set aside (`onKeepMine`).
+function MarkdownViewer({ openNewest = false, openDocId = null, source = null, onSourceChange = null, onReloadFromDisk = null, onKeepMine = null }) {
   // Documents and learning state belong to the active profile.
   const { getProfileKey } = useNexusData();
   const KEYS = React.useMemo(() => ({
@@ -581,6 +643,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
     learn: getProfileKey(LEARN_MODE_KEY), progress: getProfileKey(PROGRESS_KEY),
   }), [getProfileKey]);
   const [newest] = useStateMD(() => {
+    if (source?.path) return null // a file that comes with a path is what is shown, not a saved document
     if (openDocId) return loadDocs(KEYS.docs).find(d => d.id === openDocId) ?? null;
     return openNewest ? [...loadDocs(KEYS.docs)].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] ?? null : null;
   });
@@ -592,6 +655,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
 
   // Document state
   const [docs, setDocs]                 = useStateMD(() => loadDocs(KEYS.docs));
+  const { slot: inDocumentsBar } = React.useContext(DocumentsBarContext);
+  // The formatting buttons sit in a dropdown to save room; pinning turns them into a bar under the top bar.
+  const [toolbarPinned, setToolbarPinned] = usePersisted('nexusmd.markdown.toolbarPinned', false);
   const [currentDocId, setCurrentDocId] = useStateMD(newest?.id ?? null);
   const [compareDocId, setCompareDocId] = useStateMD(null);   // shown beside the open document in the Compare view
   const [compareShows, setCompareShows] = useStateMD('preview'); // the Compare pane: the other document's 'preview', or the 'diff' against it
@@ -616,7 +682,7 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
   const saveTimerRef       = useRefMD(null);
   const createDocTimerRef  = useRefMD(null);
   const saveStatusTimerRef = useRefMD(null);
-  const markdownRef        = useRefMD('');
+  const markdownRef        = useRefMD(newest?.content ?? '');
   const isLoadingDoc       = useRefMD(!!newest); // a document opened at the start is not an edit, so it is not saved again
   const sourceRef          = useRefMD(source);
   const [externalSaveError, setExternalSaveError] = useStateMD('');
@@ -628,16 +694,26 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
   // A desktop file association hands Documents a trusted path and its read
   // stamp. It is deliberately not made into a profile document: Save writes
   // straight back to that path.
+  const loadingTextRef = useRefMD(null); // the text a file was just loaded with, until the buffer shows it
+  // { path, stamp, text } of the file as last loaded or saved here; text is null for a file loaded with unsaved edits (it stays unsaved).
+  const loadedRef = useRefMD(null);
+  sourceRef.current = source; // the tab on screen, whatever a save that is still running was started for
   useEffectMD(() => {
-    sourceRef.current = source;
     if (!source?.path) return;
+    // Our own save, handed back with the stamp it made: nothing to load, and the saved state stays.
+    if (loadedRef.current?.path === source.path && loadedRef.current.stamp === source.stamp) return;
+    loadedRef.current = { path: source.path, stamp: source.stamp, text: source.dirty ? null : (source.text ?? '') };
     clearTimeout(saveTimerRef.current);
     clearTimeout(createDocTimerRef.current);
-    isLoadingDoc.current = true;
+    const text = source.text ?? '';
+    // Only a load that changes the buffer is "not an edit"; one that leaves it as it is would leave the flag set for the next real edit.
+    const changes = text !== markdownRef.current || currentDocId !== null;
+    isLoadingDoc.current = changes;
+    loadingTextRef.current = text !== markdownRef.current ? text : null;
     setCurrentDocId(null);
-    setMarkdown(source.text ?? '');
+    setMarkdown(text);
     setExternalSaveError('');
-    setSaveStatus('');
+    setSaveStatus(source.dirty ? 'unsaved' : '');
     setAutosaveMs(Number(localStorage.getItem(`nexusmd.documents.autosave.${source.path}`)) || 0);
   }, [source?.path, source?.stamp]);
 
@@ -656,6 +732,17 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
 
   // Keep markdownRef in sync for use inside async timer callbacks
   useEffectMD(() => { markdownRef.current = markdown; }, [markdown]);
+
+  // An original file that is edited tells its tab, so the edits survive switching to another file.
+  useEffectMD(() => {
+    const open = sourceRef.current;
+    const loaded = loadedRef.current;
+    if (!open?.path || !onSourceChange || loaded?.path !== open.path) return;
+    if (loadingTextRef.current !== null) { if (markdown === loadingTextRef.current) loadingTextRef.current = null; return; }
+    // Dirty against what was last loaded or saved, so typing a character and deleting it again leaves the tab clean.
+    const dirty = loaded.text === null || markdown !== loaded.text;
+    if (markdown !== (open.text ?? '') || dirty !== !!open.dirty) onSourceChange({ text: markdown, dirty }, open.path);
+  }, [markdown]);
 
   // Persist learnMode to localStorage
   useEffectMD(() => { localStorage.setItem(KEYS.learn, learnMode); }, [learnMode]);
@@ -768,12 +855,18 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
       const api = window.electronAPI?.editor;
       if (!api?.write) { setExternalSaveError('This file cannot be saved from this platform.'); return; }
       setSaveStatus('saving'); setExternalSaveError('');
+      const written = markdownRef.current; // what this save writes; the buffer may move on, or another tab be shown, before it finishes
+      const here = () => sourceRef.current?.path === openSource.path;
       try {
-        const result = await api.write(openSource.path, markdownRef.current, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
-        if (!result?.ok) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); return; }
-        sourceRef.current = { ...openSource, stamp: result.stamp };
-        setSaveStatus('saved');
-      } catch (err) { log.warn('saving the original file failed', err); setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); }
+        const result = await api.write(openSource.path, written, { expectedStamp: openSource.stamp, overwrite: false, bom: !!openSource.bom });
+        if (!result?.ok) { if (here()) { setExternalSaveError(result?.conflict ? 'The file changed on disk. Your edits are still here.' : 'The original file is unavailable. Your edits are still here.'); setSaveStatus('error'); } return; }
+        // The tab learns what was written whichever tab is shown; the buffer and the status change only if it is still this file's.
+        onSourceChange?.({ stamp: result.stamp, savedText: written }, openSource.path);
+        if (here()) {
+          loadedRef.current = { path: openSource.path, stamp: result.stamp, text: written };
+          setSaveStatus(markdownRef.current === written ? 'saved' : 'unsaved');
+        }
+      } catch (err) { log.warn('saving the original file failed', err); if (here()) { setExternalSaveError(err?.message || 'Could not save the original file. Your edits are still here.'); setSaveStatus('error'); } }
       return;
     }
     if (!markdownRef.current) return;
@@ -924,6 +1017,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
   useEffectMD(() => {
     const onPaste = (e) => {
       if (document.activeElement === editorRef.current) return;
+      // A paste into any other field (the find bar, a modal's name box) belongs to that field, not to the page.
+      const t = e.target;
+      if (t instanceof Element && (t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))) return;
       const text = e.clipboardData.getData("text/plain");
       if (text) {
         clearTimeout(saveTimerRef.current);
@@ -1140,8 +1236,8 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
         fontSize:      14,
       }}>
 
-        {/* TOP BAR */}
-        <div style={{
+        {/* TOP BAR: on the Documents page these controls join the page's own top bar (ToolBarRow) */}
+        <ToolBarRow style={{
           display:    "flex",
           alignItems: "center",
           gap:        10,
@@ -1152,9 +1248,9 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
           flexShrink: 0,
           userSelect: "none",
         }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", letterSpacing: ".02em", marginRight: 4, whiteSpace: "nowrap" }}>
+          {!inDocumentsBar && <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", letterSpacing: ".02em", marginRight: 4, whiteSpace: "nowrap" }}>
             Markdown
-          </span>
+          </span>}
 
           {/* View tabs */}
           <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: "var(--radius-sm)", padding: 3, gap: 2 }}>
@@ -1333,9 +1429,26 @@ function MarkdownViewer({ openNewest = false, openDocId = null, source = null })
             Learn
           </button>
 
-        </div>
+          {!toolbarPinned && <FormatMenu onInsert={insertSnippet} onPin={() => setToolbarPinned(true)} />}
+        </ToolBarRow>
 
-        <MarkdownToolbar onInsert={insertSnippet} />
+        {source?.path && (source.conflict || source.missing) && (
+          <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', fontSize: 12, flexShrink: 0, background: 'var(--accent-soft)', borderBottom: '1px solid var(--accent-border)', color: 'var(--text)' }}>
+            {source.conflict
+              ? <><span>Changed on disk. Your unsaved edits are still here.</span>
+                  <button style={barBtnStyle} onClick={onReloadFromDisk} title="Replace what is here with the file as it is now">Reload</button>
+                  <button style={barBtnStyle} onClick={onKeepMine} title="Keep your edits; the next save writes them over the file">Keep mine</button></>
+              : <span>File removed — your text is kept.</span>}
+          </div>
+        )}
+
+        {externalSaveError && (
+          <div role="alert" style={{ padding: '6px 14px', fontSize: 12, flexShrink: 0, background: 'var(--danger-soft, var(--accent-soft))', borderBottom: '1px solid var(--border)', color: 'var(--danger, var(--text))' }}>
+            {externalSaveError}
+          </div>
+        )}
+
+        {toolbarPinned && <MarkdownToolbar onInsert={insertSnippet} onUnpin={() => setToolbarPinned(false)} />}
 
         <FindBar find={{ ...find, close: closeFind }} />
 

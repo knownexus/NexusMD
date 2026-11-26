@@ -89,3 +89,16 @@ describe('routing the files the desktop app is opened with', () => {
     expect(t.notify.mock.calls[0][0]).toMatch(/permission denied/)
   })
 })
+
+describe('several files opened together (Windows starts the app once per selected file)', () => {
+  it('reach Documents in the order given, even when their reads finish out of order', async () => {
+    const names = Array.from({ length: 10 }, (_, i) => `f${i}.md`)
+    const files = Object.fromEntries(names.map(n => [`/n/${n}`, { text: n }]))
+    const t = setup({ files })
+    // The first files read slowest.
+    t.api.read.mockImplementation(p => new Promise(r => setTimeout(() => r({ path: p, text: files[p].text }), 30 - Number(p.match(/f(\d)/)[1]) * 3)))
+    t.open(names.map(n => `/n/${n}`))
+    await new Promise(r => setTimeout(r, 400))
+    expect(t.calls.map(c => c.name)).toEqual(names)
+  })
+})

@@ -18,7 +18,7 @@ const STORAGE_KEY = 'documents_active_tab'
 // the tool named by `openedTool` ('markdown' or 'json'), so that tool is shown with the newest document open, whichever tool
 // was last in use. The person can pick another tool afterwards. `openDocId` (a Home shortcut) names the document to open in
 // that tool instead of the newest.
-export function DocumentsView({ opened = 0, openedTool = 'markdown', openedSource = null, openDocId = null }) {
+export function DocumentsView({ opened = 0, openedTool = 'markdown', openedSource = null, openDocId = null, onSourceChange, onReloadFromDisk, onKeepMine }) {
   const [activeTab, setActiveTab] = usePersisted(STORAGE_KEY, 'markdown')
   // The tool the opened file is in, until the person picks another tab.
   const [fileTool, setFileTool] = React.useState(opened ? openedTool : null)
@@ -32,14 +32,17 @@ export function DocumentsView({ opened = 0, openedTool = 'markdown', openedSourc
   const pickTab = (id) => { setFileTool(null); setActiveTab(id) }
   // The save state the active tool reports; null while it reports none.
   const [save, setSave] = React.useState(null)
-  const context = React.useMemo(() => ({ setSave }), [])
+  // The bar's spare room, where the open tool puts its own controls (see ToolBarRow).
+  const [slot, setSlot] = React.useState(null)
+  const context = React.useMemo(() => ({ setSave, slot }), [slot])
 
   return (
     <DocumentsBarContext.Provider value={context}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        <DocumentsBar tabs={TABS} tab={tab} onTab={pickTab} save={save} />
+        <DocumentsBar tabs={TABS} tab={tab} onTab={pickTab} save={save} slotRef={setSlot} />
         <div style={{ flex: 1, overflow: 'hidden' }}>
-          {tab === 'markdown' ? <MarkdownViewer openNewest={fileTool === 'markdown'} openDocId={fileTool === 'markdown' ? openDocId : null} source={fileTool === 'markdown' ? openedSource : null}/>
+          {tab === 'markdown' ? <MarkdownViewer openNewest={fileTool === 'markdown'} openDocId={fileTool === 'markdown' ? openDocId : null} source={fileTool === 'markdown' ? openedSource : null}
+              onSourceChange={onSourceChange} onReloadFromDisk={onReloadFromDisk} onKeepMine={onKeepMine}/>
             : tab === 'json' ? <JsonEditorView openNewest={fileTool === 'json'} openDocId={fileTool === 'json' ? openDocId : null} source={fileTool === 'json' ? openedSource : null}/> : <RegexTesterView/>}
         </div>
       </div>

@@ -18,6 +18,7 @@ import {
   WeekCalendarPicker, PlHeaderMenu, PlMenuItem, PlMenuRadio, DeleteWeekModal,
 } from '../planner/planner-modals.jsx'
 import { plannerExportDocx as _defaultExportDocx } from '../planner/docx.js'
+import { InHeader } from '../page-head.jsx'
 
 const log = rendererLog('planner', 'view')
 
@@ -521,13 +522,8 @@ function PlannerView({ data, setData, themes, setThemes, onExportDocx, showGloba
     else _defaultExportDocx(data, themes, dateStr)
   }
 
-  const header = (
-    <div className="page-head">
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Planner</h1>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{weekLabel.full}</div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+  const headerActions = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
         {onCloudSync && (
           <button type="button" className="btn sm ghost" title="Back up / sync planner to cloud"
             disabled={cloudSyncing}
@@ -594,7 +590,21 @@ function PlannerView({ data, setData, themes, setThemes, onExportDocx, showGloba
           </PlHeaderMenu>
         )}
       </div>
-    </div>
+  )
+
+  const header = (
+    <InHeader fallback={
+      <div className="page-head">
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Planner</h1>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{weekLabel.full}</div>
+      </div>
+        {headerActions}
+      </div>
+    }>
+      <span className="topbar-sub">{weekLabel.full}</span>
+      {headerActions}
+    </InHeader>
   )
 
   if (isNewWeek) {

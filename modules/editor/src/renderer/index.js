@@ -35,9 +35,15 @@ export default {
 
     // Markdown and JSON files go to the Documents app (when installed), every other file to the Editor.
     const open = createOpenHandler({ store: editorStore, api: editorApi, host, notify: toast })
-    // Files the app was launched with, then any from later launches.
-    Promise.resolve(api.takePending?.()).then(paths => { if (Array.isArray(paths)) open(paths) }).catch(ignored(log, 'the files the app was launched with could not be read', 'warn'))
-    api.onOpenRequest?.(open)
+    // Files the app was launched with, then any from later launches: a request that arrives while the launch files are still being
+    // fetched waits for them, so the file the app was launched with is not shown over the ones opened after it.
+    let launched = false
+    const early = []
+    api.onOpenRequest?.(paths => { if (launched) open(paths); else early.push(paths) })
+    Promise.resolve(api.takePending?.())
+      .then(paths => { if (Array.isArray(paths)) open(paths) })
+      .catch(ignored(log, 'the files the app was launched with could not be read', 'warn'))
+      .finally(() => { launched = true; early.splice(0).forEach(paths => open(paths)) })
 
     // Closing the window with unsaved edits asks first.
     window.addEventListener('beforeunload', e => {

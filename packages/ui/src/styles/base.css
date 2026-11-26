@@ -1835,3 +1835,8 @@ button:focus-visible, .filter-chip:focus-visible { outline-offset: -1px; }
 .nx-rail-strip { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 40px; padding: 12px 0; border: 0; border-left: 1px solid var(--border); background: var(--surface); color: var(--text-muted); cursor: pointer; }
 .nx-rail-strip:hover { background: var(--surface-2); }
 .nx-rail-strip-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+
+/* ---------- A page's summary line, when it sits in the shell header (see page-head.jsx) ---------- */
+.topbar-slot { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding-right: 8px; }
+.topbar-sub { color: var(--text-subtle); font-size: 12.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-slot > .page-head-actions { flex-shrink: 0; }

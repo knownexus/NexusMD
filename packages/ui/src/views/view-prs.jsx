@@ -6,6 +6,7 @@ import { FilterChip } from '../components.jsx'
 import { Avatar, NotificationBanner, usePersisted } from '../app-components.jsx'
 import { Icon } from '../icons.jsx'
 import { useNexusData, useEffectiveNeedsMe, useEffectiveTeamActivity, useIsAuthoredByMe } from '../data-context.jsx'
+import { PageHead } from '../page-head.jsx'
 import { resolveFields, PR_CARD_FIELDS, rendererLog, ignored } from '@nexusmd/core'
 
 const log = rendererLog('work', 'prs')
@@ -227,16 +228,12 @@ export function PRView({ prs, onOpen, onOpenLink, needsMeCriteria, setNeedsMeCri
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1>Pull requests</h1>
-          <div className="sub">{counts.active} active · {counts.drafts} drafts · {counts.needsMe} awaiting your review</div>
-        </div>
-        <div className="page-head-actions">
+      <PageHead title="Pull requests"
+        sub={<>{counts.active} active · {counts.drafts} drafts · {counts.needsMe} awaiting your review</>}
+        actions={<>
           <button className="btn sm ghost"><Icon name="filter" size={13}/> Filter</button>
           <button className="btn sm" onClick={() => NexusMDApi?.load().catch(ignored(log, 'refreshing the pull requests failed', 'warn'))}><Icon name="refresh" size={13}/> Refresh</button>
-        </div>
-      </div>
+        </>} />
 
       {prError && (
         <div role="alert" title={NexusMDData.PR_ERROR_DETAIL || prError}

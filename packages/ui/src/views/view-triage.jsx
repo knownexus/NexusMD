@@ -12,6 +12,7 @@ import { WorkItemDetail } from './work-item-detail.jsx';
 import { usePersisted } from '../app-components.jsx';
 import { toast } from '../toast.jsx';
 import { useNexusData } from '../data-context.jsx';
+import { PageHead } from '../page-head.jsx'
 import { displayIdOf } from '@nexusmd/core';
 
 export const BUCKET_META = {
@@ -322,18 +323,14 @@ export function TriageView() {
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1>Triage</h1>
-          <div className="sub">{counts.total} open · unassigned work item{counts.total !== 1 ? 's' : ''}</div>
-        </div>
-        <div className="page-head-actions">
+      <PageHead title="Triage"
+        sub={<>{counts.total} open · unassigned work item{counts.total !== 1 ? 's' : ''}</>}
+        actions={<>
           <TriageStatusLine style={{ marginRight: 4 }} />
           <TriageExportButton label="Export to spreadsheet"
             availableStates={Array.from(new Set(items.map(i => i.state).filter(Boolean))).sort()} />
           <button className="btn sm ghost" onClick={load} disabled={loading}><Icon name="refresh" size={13}/> {loading ? 'Loading…' : 'Refresh'}</button>
-        </div>
-      </div>
+        </>} />
 
       {/* KPI tiles */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
