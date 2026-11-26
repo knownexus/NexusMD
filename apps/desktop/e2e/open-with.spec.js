@@ -72,7 +72,8 @@ test.describe('files the app is opened with', () => {
     await withApps(['documents', 'editor'], { args: [file] }, async ({ win }) => {
       await showing(win, 'Documents')
       await expect(win.getByText('Ship the thing.').first()).toBeVisible({ timeout: 20_000 })
-      await expect(win.getByRole('tab', { name: /plan\.md/ })).toHaveCount(0)
+      // A Markdown file that comes with a path is a tab of its own, beside any others opened with it.
+      await expect(win.getByRole('tab', { name: /plan\.md/ })).toHaveCount(1)
     })
   })
 

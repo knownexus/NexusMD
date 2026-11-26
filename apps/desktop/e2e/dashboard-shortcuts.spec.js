@@ -152,10 +152,6 @@ test('Pin to Dashboard from the Editor adds a shortcut that opens that file, and
   try {
     const { app, win, close } = await launchApp({ seed: seedFor({ repo, notesFile: join(notes, 'x.md') }), args: [pinFile] })
     try {
-      // The file given at launch may arrive before the Editor is listening (the Dashboard is heavier to start): once the
-      // Dashboard is up, hand it over again, as a second launch does.
-      await expect(win.getByRole('button', { name: 'Add widget' }).first()).toBeVisible({ timeout: 30_000 })
-      await app.evaluate(({ app: a }) => a.emit('second-instance', {}, process.argv, process.cwd()))
       await expect(win.getByRole('tab', { name: /pin-me\.txt/ })).toBeVisible({ timeout: 30_000 })
       await win.getByRole('button', { name: 'Pin', exact: true }).click()
       await expect(win.getByText('Pinned to the Dashboard')).toBeVisible()
