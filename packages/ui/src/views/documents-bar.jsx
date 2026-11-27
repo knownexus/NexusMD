@@ -48,10 +48,10 @@ export function DocumentsBar({ tabs, tab, onTab, save, slotRef }) {
   const headerSlot = React.useContext(HeaderSlotContext)
   const toolTabs = <Segmented ariaLabel="Documents tool" value={tab} onChange={onTab} options={tabs} />
   return (
-    <div className="nx-docs-bar" style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 14, height: 48, padding: '0 16px', boxSizing: 'border-box', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+    <div className="nx-docs-bar" style={{ display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 14, minHeight: 48, padding: '6px 16px', boxSizing: 'border-box', background: 'var(--surface)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
       {headerSlot ? createPortal(toolTabs, headerSlot) : toolTabs}
-      <style>{'.nx-docs-slot > * { flex-shrink: 0 } .nx-docs-slot { scrollbar-width: thin }'}</style>
-      <div ref={slotRef} className="nx-docs-slot" style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, overflowX: 'auto' }} />
+      <style>{'.nx-docs-slot > * { flex-shrink: 0 }'}</style>
+      <div ref={slotRef} className="nx-docs-slot" style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }} />
       <SaveState save={save} />
     </div>
   )
